@@ -109,6 +109,17 @@ def fetch_all(table, order_by="id"):
     return rows
 
 
+def query(sql, params=None):
+    """Executa um SELECT customizado (ex: com JOIN) e retorna as linhas."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(sql, params or ())
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
+
+
 def execute(query, params=None):
     """Executa INSERT/UPDATE/DELETE. Retorna o id gerado, se houver RETURNING."""
     conn = get_connection()
