@@ -73,10 +73,11 @@ else:
             col_status, col_datas = st.columns(2)
 
             with col_status:
+                status_atual = doc["status"] if doc["status"] in STATUS_ORDEM else STATUS_ORDEM[0]
                 novo_status = st.selectbox(
                     "Status",
                     options=STATUS_ORDEM,
-                    index=STATUS_ORDEM.index(doc["status"]),
+                    index=STATUS_ORDEM.index(status_atual),
                     format_func=lambda x: STATUS_LABELS[x],
                     key=f"status_{doc['id']}",
                 )
