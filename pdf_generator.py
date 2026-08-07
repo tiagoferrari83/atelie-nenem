@@ -43,7 +43,7 @@ def gerar_pdf(tipo, prestador, cliente, itens, observacoes=""):
     if prestador.get("logo"):
         logo_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png").name
         with open(logo_path, "wb") as f:
-            f.write(prestador["logo"])
+            f.write(bytes(prestador["logo"]))
         try:
             pdf.image(logo_path, x=10, y=10, w=25)
         except Exception:

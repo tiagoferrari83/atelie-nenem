@@ -24,7 +24,12 @@ with st.form("form_prestador"):
         if not nome:
             st.error("O nome é obrigatório.")
         else:
-            logo_bytes = logo_file.read() if logo_file else (existente["logo"] if existente else None)
+            if logo_file:
+                logo_bytes = logo_file.read()
+            elif existente and existente["logo"]:
+                logo_bytes = bytes(existente["logo"])
+            else:
+                logo_bytes = None
 
             if existente:
                 execute(
@@ -48,4 +53,4 @@ with st.form("form_prestador"):
 
 if existente and existente["logo"]:
     st.subheader("Logo atual")
-    st.image(existente["logo"], width=150)
+    st.image(bytes(existente["logo"]), width=150)
