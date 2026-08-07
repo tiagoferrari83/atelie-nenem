@@ -11,12 +11,21 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
    ```
 
 2. Copie o arquivo `.streamlit/secrets.toml.example` para `.streamlit/secrets.toml`
-   e preencha com a sua connection string real do Supabase (com a senha):
+   e preencha com os dados reais do Supabase:
    ```
    cp .streamlit/secrets.toml.example .streamlit/secrets.toml
    ```
+   - `url`: connection string do banco (Settings → Database → Connection pooler)
+   - `storage_url`: URL do projeto (Settings → API → Project URL)
+   - `storage_key`: a chave `anon` `public` (Settings → API → Project API keys)
 
-3. Rode o app:
+3. **Crie o bucket de fotos no Supabase Storage** (passo manual, uma vez só):
+   - No painel do Supabase, vá em **Storage** → **New bucket**
+   - Nome: `orcamento-fotos`
+   - Marque como **Public bucket** (para as fotos abrirem direto pela URL)
+   - Salvar
+
+4. Rode o app:
    ```
    streamlit run app.py
    ```
@@ -28,18 +37,23 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
 2. Acesse [share.streamlit.io](https://share.streamlit.io), conecte seu GitHub e
    selecione o repositório.
 3. Em **Settings → Secrets** do próprio Streamlit Cloud, cole o conteúdo do seu
-   `secrets.toml` real (com a senha do Supabase).
-4. Deploy!
+   `secrets.toml` real (url, storage_url, storage_key).
+4. Não esqueça do passo 3 acima (criar o bucket `orcamento-fotos` no Storage) —
+   é feito uma vez só, direto no painel do Supabase, e vale tanto local quanto em produção.
+5. Deploy!
 
 ## Estrutura
 
-- `app.py` — página inicial
-- `database.py` — conexão com Supabase e criação das tabelas
+- `app.py` — dashboard: OS reabertas, OS em aberto e agenda de próximas entregas
+- `database.py` — conexão com Supabase e criação/atualização das tabelas
+- `constants.py` — labels e opções de tipo de pedido, status, etc.
+- `storage.py` — upload/exclusão de fotos no Supabase Storage
 - `pages/1_Prestador.py` — cadastro dos dados da empresa/ateliê (com logo)
 - `pages/2_Clientes.py` — cadastro de clientes
 - `pages/3_Servicos.py` — cadastro de serviços (por unidade, tempo ou metro)
 - `pages/4_Materia_Prima.py` — cadastro de matéria-prima (por unidade, metro ou peso)
-- `pages/5_Orcamento.py` — monta orçamento/ordem de serviço e gera o PDF
+- `pages/5_Orcamento.py` — monta orçamento/ordem de serviço, anexa fotos e gera o PDF
+- `pages/6_Consultar.py` — consulta documentos, atualiza status, gera OS a partir de orçamento
 - `pdf_generator.py` — geração dos PDFs de orçamento/ordem de serviço
 
 ## Fluxo de uso
@@ -47,5 +61,20 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
 1. Cadastre o **Prestador de Serviço** (seus dados, aparecem no cabeçalho do PDF)
 2. Cadastre **Clientes**
 3. Cadastre **Serviços** e/ou **Matéria-Prima**
-4. Na página **Orçamento**, escolha o cliente, adicione os itens desejados,
-   defina se é Orçamento ou Ordem de Serviço, e clique em "Salvar e Gerar PDF"
+4. Na página **Orçamento**, escolha o tipo de documento (Orçamento ou Ordem de Serviço),
+   o tipo de pedido (Confecção, Personalização ou Criação), o cliente, os itens e,
+   se quiser, anexe fotos de referência. Clique em "Salvar e Gerar PDF".
+5. Em **Consultar**, acompanhe todos os documentos, atualize o status
+   (Nova → Aguardando aprovação → Em atendimento → Entregue, ou Reaberta se precisar
+   retomar algo já entregue), e crie uma Ordem de Serviço direto a partir de um Orçamento
+   já aprovado.
+6. O **Dashboard** (tela inicial) mostra Ordens de Serviço reabertas em destaque,
+   as ordens em aberto mais próximas da entrega, e uma agenda dos próximos 7 dias.
+
+## Sobre as fotos
+
+As fotos anexadas ao orçamento/OS ficam no **Supabase Storage** (bucket `orcamento-fotos`),
+não no banco de dados — isso evita estourar a cota de 500MB do Postgres free. O banco
+guarda apenas a URL pública de cada foto. Elas não entram no PDF, servem só como
+referência de consulta na tela.
+

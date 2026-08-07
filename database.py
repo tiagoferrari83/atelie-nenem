@@ -71,11 +71,58 @@ def init_db():
         CREATE TABLE IF NOT EXISTS orcamentos (
             id SERIAL PRIMARY KEY,
             cliente_id INTEGER REFERENCES clientes(id),
-            tipo TEXT NOT NULL CHECK (tipo IN ('orcamento', 'ordem_servico')),
-            status TEXT DEFAULT 'aberto',
+            tipo_operacao TEXT NOT NULL CHECK (tipo_operacao IN ('orcamento', 'ordem_servico')),
+            tipo_pedido TEXT NOT NULL CHECK (tipo_pedido IN ('confeccao', 'personalizacao', 'criacao')),
+            status TEXT NOT NULL DEFAULT 'nova' CHECK (
+                status IN ('nova', 'aguardando_aprovacao', 'em_atendimento', 'entregue', 'reaberta')
+            ),
             observacoes TEXT,
+            data_validade DATE,
+            data_entrega DATE,
+            orcamento_origem_id INTEGER REFERENCES orcamentos(id),
             criado_em TIMESTAMP DEFAULT NOW()
         );
+    """)
+
+    # Compatibilidade: bancos criados antes desta versão tinham a coluna "tipo" e não tinham as demais.
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamentos' AND column_name = 'tipo'
+            ) THEN
+                EXECUTE 'ALTER TABLE orcamentos RENAME COLUMN tipo TO tipo_operacao';
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamentos' AND column_name = 'tipo_pedido'
+            ) THEN
+                ALTER TABLE orcamentos ADD COLUMN tipo_pedido TEXT NOT NULL DEFAULT 'confeccao';
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamentos' AND column_name = 'data_validade'
+            ) THEN
+                ALTER TABLE orcamentos ADD COLUMN data_validade DATE;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamentos' AND column_name = 'data_entrega'
+            ) THEN
+                ALTER TABLE orcamentos ADD COLUMN data_entrega DATE;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamentos' AND column_name = 'orcamento_origem_id'
+            ) THEN
+                ALTER TABLE orcamentos ADD COLUMN orcamento_origem_id INTEGER REFERENCES orcamentos(id);
+            END IF;
+        END $$;
     """)
 
     # Itens do orçamento (serviços e materiais usados)
@@ -89,6 +136,17 @@ def init_db():
             quantidade NUMERIC(10, 2) NOT NULL,
             valor_unitario NUMERIC(10, 2) NOT NULL,
             valor_total NUMERIC(10, 2) NOT NULL
+        );
+    """)
+
+    # Fotos anexadas ao orçamento/OS - guarda só a URL do Supabase Storage, não o binário
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS orcamento_fotos (
+            id SERIAL PRIMARY KEY,
+            orcamento_id INTEGER REFERENCES orcamentos(id) ON DELETE CASCADE,
+            url TEXT NOT NULL,
+            storage_path TEXT NOT NULL,
+            criado_em TIMESTAMP DEFAULT NOW()
         );
     """)
 

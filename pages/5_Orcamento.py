@@ -1,8 +1,14 @@
 import streamlit as st
+from datetime import date, timedelta
 from database import fetch_all, execute
 from pdf_generator import gerar_pdf
+from storage import upload_foto
+from constants import TIPO_PEDIDO_LABELS, TIPO_LABELS_SERVICO, TIPO_LABELS_MATERIAL
 
-st.title("📄 Orçamento / Ordem de Serviço")
+st.title("📄 Novo Orçamento / Ordem de Serviço")
+
+# --- Se veio de "criar OS a partir de orçamento", pega os dados pré-carregados ---
+origem = st.session_state.pop("criar_os_de_orcamento", None)
 
 # --- Verificações iniciais ---
 prestadores = fetch_all("prestador")
@@ -23,24 +29,64 @@ if not servicos and not materiais:
     st.warning("Cadastre ao menos um serviço ou material antes de criar um orçamento.")
     st.stop()
 
-# --- Estado da sessão para os itens adicionados ---
+# --- Estado da sessão para os itens e fotos adicionados ---
 if "itens_orcamento" not in st.session_state:
-    st.session_state.itens_orcamento = []
+    st.session_state.itens_orcamento = origem["itens"] if origem else []
+if "fotos_orcamento" not in st.session_state:
+    st.session_state.fotos_orcamento = []
 
-# --- Seleção do tipo de documento e cliente ---
-tipo_doc = st.radio("Tipo de documento", options=["orcamento", "ordem_servico"],
-                     format_func=lambda x: "Orçamento" if x == "orcamento" else "Ordem de Serviço",
-                     horizontal=True)
+# --- Tipo de operação e tipo de pedido ---
+if origem:
+    st.info(f"Criando Ordem de Serviço a partir do Orçamento #{origem['orcamento_id']}.")
+    tipo_operacao = "ordem_servico"
+    st.markdown("**Tipo de documento:** Ordem de Serviço")
+else:
+    tipo_operacao = st.radio(
+        "Tipo de documento",
+        options=["orcamento", "ordem_servico"],
+        format_func=lambda x: "Orçamento" if x == "orcamento" else "Ordem de Serviço",
+        horizontal=True,
+    )
 
+tipo_pedido_default = origem["tipo_pedido"] if origem else "confeccao"
+tipo_pedido = st.selectbox(
+    "Tipo de pedido",
+    options=list(TIPO_PEDIDO_LABELS.keys()),
+    format_func=lambda x: TIPO_PEDIDO_LABELS[x],
+    index=list(TIPO_PEDIDO_LABELS.keys()).index(tipo_pedido_default),
+)
+
+# --- Cliente ---
 cliente_opcoes = {c["nome"]: c for c in clientes}
-cliente_nome = st.selectbox("Cliente", options=list(cliente_opcoes.keys()))
+if origem:
+    cliente_nome_default = next((c["nome"] for c in clientes if c["id"] == origem["cliente_id"]), None)
+    idx_default = list(cliente_opcoes.keys()).index(cliente_nome_default) if cliente_nome_default else 0
+else:
+    idx_default = 0
+cliente_nome = st.selectbox("Cliente", options=list(cliente_opcoes.keys()), index=idx_default)
 cliente_selecionado = cliente_opcoes[cliente_nome]
+
+# --- Datas ---
+col_d1, col_d2 = st.columns(2)
+data_validade = None
+data_entrega = None
+
+if tipo_operacao == "orcamento":
+    with col_d1:
+        data_validade = st.date_input(
+            "Validade do orçamento",
+            value=date.today() + timedelta(days=7),
+            help="Preenchida automaticamente para 7 dias a partir de hoje. Pode ajustar manualmente.",
+        )
+else:
+    with col_d1:
+        data_entrega = st.date_input(
+            "Data de entrega prevista",
+            value=date.today() + timedelta(days=7),
+        )
 
 st.divider()
 st.subheader("Adicionar itens")
-
-TIPO_LABELS_SERVICO = {"unidade": "un.", "tempo": "h", "metro": "m"}
-TIPO_LABELS_MATERIAL = {"unidade": "un.", "metro": "m", "peso": "kg"}
 
 col1, col2 = st.columns(2)
 
@@ -115,16 +161,28 @@ else:
 observacoes = st.text_area("Observações (opcional)")
 
 st.divider()
+st.subheader("Fotos de referência (opcional)")
+st.caption("As fotos são armazenadas apenas para consulta - não entram no PDF.")
+
+fotos_upload = st.file_uploader(
+    "Anexar fotos", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key="upload_fotos"
+)
+
+st.divider()
 
 if st.button("💾 Salvar e Gerar PDF", type="primary", disabled=not st.session_state.itens_orcamento):
     # Salva o cabeçalho do orçamento
     resultado = execute(
         """
-        INSERT INTO orcamentos (cliente_id, tipo, observacoes)
-        VALUES (%s, %s, %s)
+        INSERT INTO orcamentos
+            (cliente_id, tipo_operacao, tipo_pedido, observacoes, data_validade, data_entrega, orcamento_origem_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         RETURNING id
         """,
-        (cliente_selecionado["id"], tipo_doc, observacoes),
+        (
+            cliente_selecionado["id"], tipo_operacao, tipo_pedido, observacoes,
+            data_validade, data_entrega, origem["orcamento_id"] if origem else None,
+        ),
     )
     orcamento_id = resultado["id"]
 
@@ -142,19 +200,35 @@ if st.button("💾 Salvar e Gerar PDF", type="primary", disabled=not st.session_
             ),
         )
 
+    # Faz upload das fotos e salva as URLs
+    if fotos_upload:
+        for foto in fotos_upload:
+            extensao = foto.name.split(".")[-1].lower()
+            try:
+                url_publica, storage_path = upload_foto(orcamento_id, foto.read(), extensao)
+                execute(
+                    "INSERT INTO orcamento_fotos (orcamento_id, url, storage_path) VALUES (%s, %s, %s)",
+                    (orcamento_id, url_publica, storage_path),
+                )
+            except Exception as e:
+                st.warning(f"Não foi possível enviar a foto '{foto.name}': {e}")
+
     # Gera o PDF
     pdf_path = gerar_pdf(
-        tipo=tipo_doc,
+        tipo=tipo_operacao,
         prestador=prestador,
         cliente=cliente_selecionado,
         itens=st.session_state.itens_orcamento,
         observacoes=observacoes,
+        tipo_pedido_label=TIPO_PEDIDO_LABELS[tipo_pedido],
+        data_validade=data_validade,
+        data_entrega=data_entrega,
     )
 
     with open(pdf_path, "rb") as f:
         pdf_bytes = f.read()
 
-    nome_arquivo = f"{'orcamento' if tipo_doc == 'orcamento' else 'ordem_servico'}_{cliente_selecionado['nome'].replace(' ', '_')}.pdf"
+    nome_arquivo = f"{'orcamento' if tipo_operacao == 'orcamento' else 'ordem_servico'}_{cliente_selecionado['nome'].replace(' ', '_')}.pdf"
 
     st.success("Documento salvo e PDF gerado com sucesso!")
     st.download_button(
@@ -165,3 +239,4 @@ if st.button("💾 Salvar e Gerar PDF", type="primary", disabled=not st.session_
     )
 
     st.session_state.itens_orcamento = []
+    st.session_state.fotos_orcamento = []

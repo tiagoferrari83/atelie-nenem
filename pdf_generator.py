@@ -26,13 +26,17 @@ class DocumentoPDF(FPDF):
         self.cell(0, 10, f"Página {self.page_no()}", align="C")
 
 
-def gerar_pdf(tipo, prestador, cliente, itens, observacoes=""):
+def gerar_pdf(tipo, prestador, cliente, itens, observacoes="", tipo_pedido_label=None,
+              data_validade=None, data_entrega=None):
     """
     tipo: 'orcamento' ou 'ordem_servico'
     prestador: dict com nome, telefone, email, cnpj, logo (bytes ou None)
     cliente: dict com nome, telefone, email, endereco
     itens: lista de dicts com descricao, quantidade, valor_unitario, valor_total
     observacoes: texto livre
+    tipo_pedido_label: rótulo do tipo de pedido (ex: "Personalização")
+    data_validade: date - validade do orçamento (só para tipo='orcamento')
+    data_entrega: date - entrega prevista (só para tipo='ordem_servico')
     """
     titulo = "ORÇAMENTO" if tipo == "orcamento" else "ORDEM DE SERVIÇO"
     pdf = DocumentoPDF(titulo)
@@ -69,6 +73,12 @@ def gerar_pdf(tipo, prestador, cliente, itens, observacoes=""):
     # --- Dados do documento ---
     pdf.set_font("Helvetica", "", 9)
     pdf.cell(0, 5, f"Data: {datetime.now().strftime('%d/%m/%Y')}", ln=True)
+    if tipo_pedido_label:
+        pdf.cell(0, 5, f"Tipo: {tipo_pedido_label}", ln=True)
+    if tipo == "orcamento" and data_validade:
+        pdf.cell(0, 5, f"Válido até: {data_validade.strftime('%d/%m/%Y')}", ln=True)
+    if tipo == "ordem_servico" and data_entrega:
+        pdf.cell(0, 5, f"Entrega prevista: {data_entrega.strftime('%d/%m/%Y')}", ln=True)
     pdf.ln(2)
 
     # --- Dados do cliente ---
@@ -117,11 +127,38 @@ def gerar_pdf(tipo, prestador, cliente, itens, observacoes=""):
         pdf.set_font("Helvetica", "", 9)
         pdf.multi_cell(0, 5, observacoes)
 
-    # --- Assinatura (só para Ordem de Serviço) ---
-    if tipo == "ordem_servico":
-        pdf.ln(20)
-        pdf.cell(0, 6, "_" * 40, ln=True, align="C")
-        pdf.cell(0, 6, "Assinatura do Cliente", ln=True, align="C")
+    # --- Assinaturas (prestador e cliente, com data/hora) ---
+    pdf.ln(20)
+
+    largura_col = 85
+    espaco = 10
+    x_inicial = pdf.get_x()
+    y_assinatura = pdf.get_y()
+
+    # Coluna do prestador (esquerda)
+    pdf.set_xy(x_inicial, y_assinatura)
+    pdf.cell(largura_col, 6, "_" * 35, ln=False, align="C")
+    pdf.set_xy(x_inicial + largura_col + espaco, y_assinatura)
+    pdf.cell(largura_col, 6, "_" * 35, ln=True, align="C")
+
+    pdf.set_xy(x_inicial, pdf.get_y())
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(largura_col, 5, "Assinatura do Prestador", align="C")
+    pdf.set_xy(x_inicial + largura_col + espaco, pdf.get_y())
+    pdf.cell(largura_col, 5, "Assinatura do Cliente", align="C")
+    pdf.ln(5)
+
+    pdf.set_x(x_inicial)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(largura_col, 5, prestador.get("nome", ""), align="C")
+    pdf.set_x(x_inicial + largura_col + espaco)
+    pdf.cell(largura_col, 5, cliente.get("nome", ""), align="C")
+    pdf.ln(8)
+
+    pdf.set_x(x_inicial)
+    pdf.cell(largura_col, 5, "Data/Hora: ____/____/______  ____:____", align="C")
+    pdf.set_x(x_inicial + largura_col + espaco)
+    pdf.cell(largura_col, 5, "Data/Hora: ____/____/______  ____:____", align="C")
 
     # --- Gera o arquivo temporário ---
     output_path = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
