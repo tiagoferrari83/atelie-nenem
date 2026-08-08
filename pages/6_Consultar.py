@@ -167,7 +167,7 @@ else:
                             for g in grupos
                         ],
                     }
-                    pagina_destino = "pages/5a_Orcamento.py" if doc["tipo_operacao"] == "orcamento" else "pages/5b_Ordem_Servico.py"
+                    pagina_destino = "pages/51_Orcamento.py" if doc["tipo_operacao"] == "orcamento" else "pages/52_Ordem_Servico.py"
                     st.switch_page(pagina_destino)
 
             with col_btn2:
@@ -231,7 +231,7 @@ else:
                                 for g in grupos
                             ],
                         }
-                        st.switch_page("pages/5b_Ordem_Servico.py")
+                        st.switch_page("pages/52_Ordem_Servico.py")
 
             with col_btn4:
                 chave_confirmacao = f"confirmar_exclusao_{doc['id']}"

@@ -52,7 +52,10 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
 - `pages/2_Clientes.py` — cadastro de clientes
 - `pages/3_Servicos.py` — cadastro de serviços (por unidade, tempo ou metro)
 - `pages/4_Materia_Prima.py` — cadastro de matéria-prima (por unidade, metro ou peso)
-- `pages/5_Orcamento.py` — monta orçamento/ordem de serviço, anexa fotos e gera o PDF
+- `pages/5_Novo.py` — tela de escolha: Orçamento ou Ordem de Serviço
+- `pages/51_Orcamento.py` — formulário de Orçamento (usa `formulario_orcamento.py`)
+- `pages/52_Ordem_Servico.py` — formulário de Ordem de Serviço (usa `formulario_orcamento.py`)
+- `formulario_orcamento.py` — lógica compartilhada dos dois formulários acima
 - `pages/6_Consultar.py` — consulta documentos, atualiza status, gera OS a partir de orçamento
 - `pdf_generator.py` — geração dos PDFs de orçamento/ordem de serviço
 
@@ -61,20 +64,22 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
 1. Cadastre o **Prestador de Serviço** (seus dados, aparecem no cabeçalho do PDF)
 2. Cadastre **Clientes**
 3. Cadastre **Serviços** e/ou **Matéria-Prima** (ou cadastre na hora, veja abaixo)
-4. Na página **Orçamento**: escolha o tipo de documento (Orçamento ou Ordem de
-   Serviço), o tipo de pedido (Confecção, Personalização ou Criação), o cliente,
-   adicione um ou mais **serviços** e, opcionalmente, **matéria-prima usada em
-   cada serviço** (a matéria-prima é sempre um subitem de um serviço específico,
-   não um item avulso). O subtotal de cada serviço soma seu valor + os materiais
-   dele; o total geral soma todos os serviços. Se quiser, anexe fotos de
-   referência. Clique em "Salvar e Gerar PDF".
+4. No menu **Novo**, escolha se vai criar um Orçamento ou uma Ordem de Serviço
+   (são duas telas separadas, para não confundir os dois fluxos). Em qualquer
+   uma: escolha o tipo de pedido (Confecção, Personalização ou Criação), o
+   cliente, adicione um ou mais **serviços** e, opcionalmente, **matéria-prima
+   usada em cada serviço** (a matéria-prima é sempre um subitem de um serviço
+   específico, não um item avulso). O subtotal de cada serviço soma seu valor +
+   os materiais dele; o total geral soma todos os serviços. Se quiser, anexe
+   fotos de referência. Clique em "Salvar e Gerar PDF".
    - **Cadastro rápido**: os botões "➕ Novo serviço" e "➕ Novo" (material) abrem
      um popup para cadastrar sem sair da tela de orçamento.
-5. Em **Consultar**, acompanhe todos os documentos, **edite** qualquer orçamento
-   ou ordem de serviço (botão "✏️ Editar"), atualize o status (Nova → Aguardando
-   aprovação → Em atendimento → Entregue, ou Reaberta se precisar retomar algo já
-   entregue), e crie uma Ordem de Serviço direto a partir de um Orçamento já
-   aprovado.
+5. Em **Consultar**, acompanhe todos os documentos, **edite** (botão "✏️ Editar")
+   ou **exclua** (botão "🗑️ Excluir", com confirmação) qualquer orçamento ou
+   ordem de serviço, atualize o status (Nova → Aguardando aprovação → Em
+   atendimento → Entregue, ou Reaberta se precisar retomar algo já entregue), e
+   crie uma Ordem de Serviço direto a partir de um Orçamento já aprovado (os
+   itens vêm todos preenchidos automaticamente).
 6. O **Dashboard** (tela inicial) mostra Ordens de Serviço reabertas em destaque,
    as ordens em aberto mais próximas da entrega, e uma agenda dos próximos 7 dias
    — clique em qualquer uma para abrir os detalhes direto na tela Consultar.

@@ -95,7 +95,7 @@ def init_db():
             observacoes TEXT,
             data_validade DATE,
             data_entrega DATE,
-            orcamento_origem_id INTEGER REFERENCES orcamentos(id),
+            orcamento_origem_id INTEGER REFERENCES orcamentos(id) ON DELETE SET NULL,
             criado_em TIMESTAMP DEFAULT NOW()
         );
     """)
@@ -162,6 +162,31 @@ def init_db():
             ALTER TABLE orcamentos ADD CONSTRAINT orcamentos_status_check
                 CHECK (status IN ('nova', 'aguardando_aprovacao', 'em_atendimento', 'entregue', 'reaberta'));
             ALTER TABLE orcamentos ALTER COLUMN status SET DEFAULT 'nova';
+        END $$;
+    """)
+
+    # Corrige a foreign key de orcamento_origem_id para ON DELETE SET NULL, para
+    # que excluir um orçamento que já gerou uma OS não seja bloqueado (a OS
+    # filha continua existindo, só perde a referência ao orçamento de origem)
+    cur.execute("""
+        DO $$
+        DECLARE
+            nome_constraint TEXT;
+        BEGIN
+            SELECT tc.constraint_name INTO nome_constraint
+            FROM information_schema.table_constraints tc
+            WHERE tc.table_name = 'orcamentos'
+              AND tc.constraint_type = 'FOREIGN KEY'
+              AND tc.constraint_name LIKE '%orcamento_origem_id%'
+            LIMIT 1;
+
+            IF nome_constraint IS NOT NULL THEN
+                EXECUTE format('ALTER TABLE orcamentos DROP CONSTRAINT %I', nome_constraint);
+            END IF;
+
+            ALTER TABLE orcamentos
+                ADD CONSTRAINT orcamentos_orcamento_origem_id_fkey
+                FOREIGN KEY (orcamento_origem_id) REFERENCES orcamentos(id) ON DELETE SET NULL;
         END $$;
     """)
 
