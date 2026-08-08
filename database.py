@@ -1,6 +1,8 @@
 """
 Módulo de conexão com o banco de dados Supabase (PostgreSQL).
-Centraliza a conexão e as funções de criação/consulta das tabelas.
+A conexão é cacheada com st.cache_resource: fica aberta e é reaproveitada
+entre as chamadas, em vez de abrir uma conexão TCP+SSL nova a cada operação
+(essa era a principal causa de lentidão - cada operação levava ~3s).
 """
 
 import streamlit as st
@@ -8,14 +10,30 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 
-def get_connection():
-    """Cria e retorna uma conexão com o banco Postgres do Supabase."""
+@st.cache_resource(show_spinner=False)
+def _get_cached_connection():
+    """Cria a conexão uma única vez por sessão de servidor e a mantém em cache."""
     conn_string = st.secrets["connections"]["supabase"]["url"]
-    return psycopg2.connect(conn_string, cursor_factory=RealDictCursor)
+    conn = psycopg2.connect(conn_string, cursor_factory=RealDictCursor)
+    conn.autocommit = False
+    return conn
+
+
+def get_connection():
+    """Retorna a conexão cacheada, reconectando automaticamente se ela tiver caído."""
+    conn = _get_cached_connection()
+    try:
+        # Testa se a conexão ainda está viva (pode cair por timeout de rede/pooler)
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1;")
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        _get_cached_connection.clear()
+        conn = _get_cached_connection()
+    return conn
 
 
 def init_db():
-    """Cria as tabelas do sistema caso ainda não existam."""
+    """Cria/atualiza as tabelas do sistema caso ainda não existam."""
     conn = get_connection()
     cur = conn.cursor()
 
@@ -125,6 +143,30 @@ def init_db():
         END $$;
     """)
 
+    # Corrige registros antigos com status fora dos valores válidos atuais
+    cur.execute("""
+        UPDATE orcamentos
+        SET status = 'nova'
+        WHERE status IS NULL
+           OR status NOT IN ('nova', 'aguardando_aprovacao', 'em_atendimento', 'entregue', 'reaberta');
+    """)
+
+    # Garante que a constraint de status reflete os valores atuais
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.table_constraints
+                WHERE table_name = 'orcamentos' AND constraint_name = 'orcamentos_status_check'
+            ) THEN
+                ALTER TABLE orcamentos DROP CONSTRAINT orcamentos_status_check;
+            END IF;
+            ALTER TABLE orcamentos ADD CONSTRAINT orcamentos_status_check
+                CHECK (status IN ('nova', 'aguardando_aprovacao', 'em_atendimento', 'entregue', 'reaberta'));
+            ALTER TABLE orcamentos ALTER COLUMN status SET DEFAULT 'nova';
+        END $$;
+    """)
+
     # Itens do orçamento (serviços e materiais usados)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orcamento_itens (
@@ -152,7 +194,6 @@ def init_db():
 
     conn.commit()
     cur.close()
-    conn.close()
 
 
 # ---------- Funções genéricas de CRUD ----------
@@ -163,7 +204,6 @@ def fetch_all(table, order_by="id"):
     cur.execute(f"SELECT * FROM {table} ORDER BY {order_by};")
     rows = cur.fetchall()
     cur.close()
-    conn.close()
     return rows
 
 
@@ -174,19 +214,22 @@ def query(sql, params=None):
     cur.execute(sql, params or ())
     rows = cur.fetchall()
     cur.close()
-    conn.close()
     return rows
 
 
-def execute(query, params=None):
+def execute(sql, params=None):
     """Executa INSERT/UPDATE/DELETE. Retorna o id gerado, se houver RETURNING."""
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(query, params or ())
-    result = None
-    if cur.description:
-        result = cur.fetchone()
-    conn.commit()
-    cur.close()
-    conn.close()
-    return result
+    try:
+        cur.execute(sql, params or ())
+        result = None
+        if cur.description:
+            result = cur.fetchone()
+        conn.commit()
+        return result
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
