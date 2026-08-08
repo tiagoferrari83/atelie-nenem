@@ -213,6 +213,19 @@ def fetch_all(table, order_by="id"):
         return rows
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_all_cached(table, order_by="id"):
+    """
+    Igual a fetch_all, mas cacheado por 30s. Usar em telas com muitos widgets
+    (selects, number_inputs) onde o Streamlit reexecuta o script inteiro a
+    cada clique/tecla - sem isso, cada interação refaz a mesma query no banco
+    à toa, o que é a maior causa de lentidão em telas como a de Orçamento.
+    Não usar para dados que precisam refletir uma escrita feita no mesmo rerun
+    (ex: logo após um INSERT, quando a tela precisa mostrar o registro novo).
+    """
+    return fetch_all(table, order_by)
+
+
 def query(sql, params=None):
     """Executa um SELECT customizado (ex: com JOIN) e retorna as linhas."""
     try:

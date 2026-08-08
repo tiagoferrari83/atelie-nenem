@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date, timedelta
-from database import fetch_all, execute
+from database import fetch_all_cached, execute
 from pdf_generator import gerar_pdf
 from storage import upload_foto
 from constants import TIPO_PEDIDO_LABELS, TIPO_LABELS_SERVICO, TIPO_LABELS_MATERIAL
@@ -11,19 +11,24 @@ st.title("📄 Novo Orçamento / Ordem de Serviço")
 origem = st.session_state.pop("criar_os_de_orcamento", None)
 
 # --- Verificações iniciais ---
-prestadores = fetch_all("prestador")
+# Usamos a versão cacheada (30s) porque esta tela tem muitos widgets (selects,
+# number_inputs): o Streamlit reexecuta o script inteiro a cada clique, e sem
+# cache isso refazia essas 4 queries a cada interação - era a causa principal
+# da lentidão. Se você acabou de cadastrar um cliente/serviço/material novo e
+# ele não aparecer aqui, é só esperar até 30s ou recarregar a página.
+prestadores = fetch_all_cached("prestador")
 if not prestadores:
     st.warning("Cadastre primeiro o Prestador de Serviço na página correspondente.")
     st.stop()
 prestador = prestadores[0]
 
-clientes = fetch_all("clientes", order_by="nome")
+clientes = fetch_all_cached("clientes", order_by="nome")
 if not clientes:
     st.warning("Cadastre pelo menos um cliente antes de criar um orçamento.")
     st.stop()
 
-servicos = fetch_all("servicos", order_by="nome")
-materiais = fetch_all("materia_prima", order_by="nome")
+servicos = fetch_all_cached("servicos", order_by="nome")
+materiais = fetch_all_cached("materia_prima", order_by="nome")
 
 if not servicos and not materiais:
     st.warning("Cadastre ao menos um serviço ou material antes de criar um orçamento.")
