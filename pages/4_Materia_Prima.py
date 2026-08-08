@@ -80,9 +80,10 @@ if not materiais:
 else:
     for m in materiais:
         with st.expander(f"{m['nome']} — R$ {m['valor']:.2f} ({TIPO_LABELS[m['tipo_medida']]})"):
+            data_edicao = m.get("atualizado_em") or m["criado_em"]
             st.caption(
                 f"Cadastrado em {m['criado_em'].strftime('%d/%m/%Y %H:%M')} — "
-                f"última edição em {m['atualizado_em'].strftime('%d/%m/%Y %H:%M')}"
+                f"última edição em {data_edicao.strftime('%d/%m/%Y %H:%M')}"
             )
             col1, col2 = st.columns(2)
             with col1:

@@ -74,9 +74,10 @@ else:
             st.write(f"**Telefone:** {c['telefone'] or '-'}")
             st.write(f"**Email:** {c['email'] or '-'}")
             st.write(f"**Endereço:** {c['endereco'] or '-'}")
+            data_edicao = c.get("atualizado_em") or c["criado_em"]
             st.caption(
                 f"Cadastrado em {c['criado_em'].strftime('%d/%m/%Y %H:%M')} — "
-                f"última edição em {c['atualizado_em'].strftime('%d/%m/%Y %H:%M')}"
+                f"última edição em {data_edicao.strftime('%d/%m/%Y %H:%M')}"
             )
 
             col1, col2 = st.columns(2)

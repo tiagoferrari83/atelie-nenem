@@ -80,9 +80,10 @@ if not servicos:
 else:
     for s in servicos:
         with st.expander(f"{s['nome']} — R$ {s['valor']:.2f} ({TIPO_LABELS[s['tipo_cobranca']]})"):
+            data_edicao = s.get("atualizado_em") or s["criado_em"]
             st.caption(
                 f"Cadastrado em {s['criado_em'].strftime('%d/%m/%Y %H:%M')} — "
-                f"última edição em {s['atualizado_em'].strftime('%d/%m/%Y %H:%M')}"
+                f"última edição em {data_edicao.strftime('%d/%m/%Y %H:%M')}"
             )
             col1, col2 = st.columns(2)
             with col1:
