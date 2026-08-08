@@ -175,8 +175,23 @@ def init_db():
             descricao TEXT NOT NULL,
             quantidade NUMERIC(10, 2) NOT NULL,
             valor_unitario NUMERIC(10, 2) NOT NULL,
-            valor_total NUMERIC(10, 2) NOT NULL
+            valor_total NUMERIC(10, 2) NOT NULL,
+            servico_pai_item_id INTEGER REFERENCES orcamento_itens(id) ON DELETE CASCADE
         );
+    """)
+
+    # Compatibilidade: adiciona a coluna de vínculo material -> serviço em bancos já existentes
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamento_itens' AND column_name = 'servico_pai_item_id'
+            ) THEN
+                ALTER TABLE orcamento_itens
+                    ADD COLUMN servico_pai_item_id INTEGER REFERENCES orcamento_itens(id) ON DELETE CASCADE;
+            END IF;
+        END $$;
     """)
 
     # Fotos anexadas ao orçamento/OS - guarda só a URL do Supabase Storage, não o binário
@@ -278,3 +293,52 @@ def execute(sql, params=None):
     except Exception:
         conn.rollback()
         raise
+
+
+def montar_grupos_orcamento(orcamento_id):
+    """
+    Busca os itens de um orçamento e monta a estrutura de grupos:
+    cada serviço com sua lista de materiais (subitens) aninhada.
+    Retorna list[dict]: [{item_id_bd, servico: {...}, materiais: [...]}, ...]
+    """
+    itens = query(
+        "SELECT * FROM orcamento_itens WHERE orcamento_id = %s ORDER BY id",
+        (orcamento_id,),
+    )
+
+    grupos = []
+    grupos_por_item_id = {}
+
+    for i in itens:
+        if i["tipo_item"] == "servico":
+            grupo = {
+                "item_id_bd": i["id"],
+                "servico": {
+                    "item_id": i["item_id"],
+                    "descricao": i["descricao"],
+                    "quantidade": float(i["quantidade"]),
+                    "valor_unitario": float(i["valor_unitario"]),
+                    "valor_total": float(i["valor_total"]),
+                },
+                "materiais": [],
+            }
+            grupos.append(grupo)
+            grupos_por_item_id[i["id"]] = grupo
+
+    for i in itens:
+        if i["tipo_item"] == "materia_prima":
+            material = {
+                "item_id": i["item_id"],
+                "descricao": i["descricao"],
+                "quantidade": float(i["quantidade"]),
+                "valor_unitario": float(i["valor_unitario"]),
+                "valor_total": float(i["valor_total"]),
+            }
+            pai_id = i["servico_pai_item_id"]
+            if pai_id in grupos_por_item_id:
+                grupos_por_item_id[pai_id]["materiais"].append(material)
+            elif grupos:
+                # Material órfão (de dados antigos, sem vínculo) - agrupa no primeiro serviço
+                grupos[0]["materiais"].append(material)
+
+    return grupos

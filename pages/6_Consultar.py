@@ -1,11 +1,11 @@
 import streamlit as st
-from database import query, fetch_all, execute
+from database import query, fetch_all, execute, montar_grupos_orcamento
 from pdf_generator import gerar_pdf
 from storage import excluir_foto
 from constants import TIPO_PEDIDO_LABELS, TIPO_OPERACAO_LABELS, STATUS_LABELS, STATUS_ORDEM, STATUS_CORES
 
 st.title("📋 Orçamentos e Ordens de Serviço")
-st.caption("Consulte os documentos já gerados, atualize o status e baixe o PDF novamente se precisar.")
+st.caption("Consulte os documentos já gerados, edite, atualize o status e baixe o PDF novamente se precisar.")
 
 # --- Filtros ---
 col1, col2, col3 = st.columns(3)
@@ -26,6 +26,9 @@ with col3:
         format_func=lambda x: "Todos" if x == "Todos" else STATUS_LABELS[x],
     )
 
+# --- Se um id específico foi passado (ex: clique no dashboard), força esse filtro ---
+id_foco = st.session_state.pop("consultar_id_foco", None)
+
 # --- Monta query com filtros ---
 sql = """
     SELECT o.id, o.tipo_operacao, o.tipo_pedido, o.status, o.observacoes,
@@ -38,17 +41,21 @@ sql = """
 """
 params = []
 
-if filtro_tipo_op != "Todos":
-    sql += " AND o.tipo_operacao = %s"
-    params.append(filtro_tipo_op)
+if id_foco is not None:
+    sql += " AND o.id = %s"
+    params.append(id_foco)
+else:
+    if filtro_tipo_op != "Todos":
+        sql += " AND o.tipo_operacao = %s"
+        params.append(filtro_tipo_op)
 
-if opcoes_cliente[filtro_cliente] is not None:
-    sql += " AND o.cliente_id = %s"
-    params.append(opcoes_cliente[filtro_cliente])
+    if opcoes_cliente[filtro_cliente] is not None:
+        sql += " AND o.cliente_id = %s"
+        params.append(opcoes_cliente[filtro_cliente])
 
-if filtro_status != "Todos":
-    sql += " AND o.status = %s"
-    params.append(filtro_status)
+    if filtro_status != "Todos":
+        sql += " AND o.status = %s"
+        params.append(filtro_status)
 
 sql += " ORDER BY o.criado_em DESC"
 
@@ -69,7 +76,7 @@ else:
 
         titulo_expander = f"{cor_status} #{doc['id']} — {tipo_op_label} ({tipo_pedido_label}) — {doc['cliente_nome']} — {data_fmt}"
 
-        with st.expander(titulo_expander):
+        with st.expander(titulo_expander, expanded=(id_foco == doc["id"])):
             col_status, col_datas = st.columns(2)
 
             with col_status:
@@ -97,20 +104,28 @@ else:
             if doc["observacoes"]:
                 st.write(f"**Observações:** {doc['observacoes']}")
 
-            # Busca os itens desse orçamento
-            itens = query(
-                "SELECT descricao, quantidade, valor_unitario, valor_total FROM orcamento_itens WHERE orcamento_id = %s ORDER BY id",
-                (doc["id"],),
-            )
+            # Busca e monta os grupos (serviço + materiais) desse orçamento
+            grupos = montar_grupos_orcamento(doc["id"])
 
-            total = sum(float(i["valor_total"]) for i in itens)
-
+            total = 0
             st.write("**Itens:**")
-            for i in itens:
+            for grupo in grupos:
+                s = grupo["servico"]
+                subtotal_grupo = s["valor_total"] + sum(m["valor_total"] for m in grupo["materiais"])
+                total += subtotal_grupo
+
                 st.write(
-                    f"- {i['descricao']}: {float(i['quantidade']):.2f} x "
-                    f"R$ {float(i['valor_unitario']):.2f} = R$ {float(i['valor_total']):.2f}"
+                    f"**{s['descricao']}** — {s['quantidade']:.2f} x "
+                    f"R$ {s['valor_unitario']:.2f} = R$ {s['valor_total']:.2f}"
                 )
+                for m in grupo["materiais"]:
+                    st.write(
+                        f"　↳ {m['descricao']}: {m['quantidade']:.2f} x "
+                        f"R$ {m['valor_unitario']:.2f} = R$ {m['valor_total']:.2f}"
+                    )
+                if grupo["materiais"]:
+                    st.caption(f"Subtotal do serviço: R$ {subtotal_grupo:.2f}")
+
             st.write(f"**Total: R$ {total:.2f}**")
 
             # --- Fotos anexadas ---
@@ -134,36 +149,55 @@ else:
 
             st.divider()
 
-            col_btn1, col_btn2 = st.columns(2)
+            col_btn1, col_btn2, col_btn3 = st.columns(3)
 
             with col_btn1:
+                if st.button("✏️ Editar", key=f"editar_{doc['id']}"):
+                    cliente_obj = next((c for c in clientes if c["nome"] == doc["cliente_nome"]), None)
+                    st.session_state["editar_orcamento"] = {
+                        "orcamento_id": doc["id"],
+                        "tipo_operacao": doc["tipo_operacao"],
+                        "cliente_id": cliente_obj["id"] if cliente_obj else None,
+                        "tipo_pedido": doc["tipo_pedido"],
+                        "observacoes": doc["observacoes"],
+                        "data_validade": doc["data_validade"],
+                        "data_entrega": doc["data_entrega"],
+                        "grupos": [
+                            {"servico": g["servico"], "materiais": g["materiais"]}
+                            for g in grupos
+                        ],
+                    }
+                    st.switch_page("pages/5_Orcamento.py")
+
+            with col_btn2:
                 if st.button("🔄 Gerar PDF novamente", key=f"pdf_{doc['id']}"):
                     prestadores = fetch_all("prestador")
                     if not prestadores:
                         st.error("Cadastre o Prestador de Serviço antes de gerar o PDF.")
                     else:
-                        prestador = prestadores[0]
-                        cliente = {
+                        prestador_pdf = prestadores[0]
+                        cliente_pdf = {
                             "nome": doc["cliente_nome"],
                             "telefone": doc["cliente_telefone"],
                             "email": doc["cliente_email"],
                             "endereco": doc["cliente_endereco"],
                         }
-                        itens_pdf = [
+                        grupos_pdf = [
                             {
-                                "descricao": i["descricao"],
-                                "quantidade": float(i["quantidade"]),
-                                "valor_unitario": float(i["valor_unitario"]),
-                                "valor_total": float(i["valor_total"]),
+                                "descricao": g["servico"]["descricao"],
+                                "quantidade": g["servico"]["quantidade"],
+                                "valor_unitario": g["servico"]["valor_unitario"],
+                                "valor_total": g["servico"]["valor_total"],
+                                "materiais": g["materiais"],
                             }
-                            for i in itens
+                            for g in grupos
                         ]
 
                         pdf_path = gerar_pdf(
                             tipo=doc["tipo_operacao"],
-                            prestador=prestador,
-                            cliente=cliente,
-                            itens=itens_pdf,
+                            prestador=prestador_pdf,
+                            cliente=cliente_pdf,
+                            grupos=grupos_pdf,
                             observacoes=doc["observacoes"] or "",
                             tipo_pedido_label=tipo_pedido_label,
                             data_validade=doc["data_validade"],
@@ -183,27 +217,17 @@ else:
                             key=f"download_{doc['id']}",
                         )
 
-            with col_btn2:
+            with col_btn3:
                 if doc["tipo_operacao"] == "orcamento":
-                    if st.button("➡️ Criar Ordem de Serviço a partir daqui", key=f"criar_os_{doc['id']}"):
+                    if st.button("➡️ Criar OS a partir daqui", key=f"criar_os_{doc['id']}"):
                         cliente_obj = next((c for c in clientes if c["nome"] == doc["cliente_nome"]), None)
                         st.session_state["criar_os_de_orcamento"] = {
                             "orcamento_id": doc["id"],
                             "cliente_id": cliente_obj["id"] if cliente_obj else None,
                             "tipo_pedido": doc["tipo_pedido"],
-                            "itens": [
-                                {
-                                    "tipo_item": i.get("tipo_item", "servico"),
-                                    "item_id": i.get("item_id", 0),
-                                    "descricao": i["descricao"],
-                                    "quantidade": float(i["quantidade"]),
-                                    "valor_unitario": float(i["valor_unitario"]),
-                                    "valor_total": float(i["valor_total"]),
-                                }
-                                for i in query(
-                                    "SELECT * FROM orcamento_itens WHERE orcamento_id = %s ORDER BY id",
-                                    (doc["id"],),
-                                )
+                            "grupos": [
+                                {"servico": g["servico"], "materiais": g["materiais"]}
+                                for g in grupos
                             ],
                         }
                         st.switch_page("pages/5_Orcamento.py")

@@ -26,13 +26,16 @@ class DocumentoPDF(FPDF):
         self.cell(0, 10, f"Página {self.page_no()}", align="C")
 
 
-def gerar_pdf(tipo, prestador, cliente, itens, observacoes="", tipo_pedido_label=None,
+def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_label=None,
               data_validade=None, data_entrega=None):
     """
     tipo: 'orcamento' ou 'ordem_servico'
     prestador: dict com nome, telefone, email, cnpj, logo (bytes ou None)
     cliente: dict com nome, telefone, email, endereco
-    itens: lista de dicts com descricao, quantidade, valor_unitario, valor_total
+    grupos: lista de dicts, cada um um serviço:
+        {descricao, quantidade, valor_unitario, valor_total,
+         materiais: [{descricao, quantidade, valor_unitario, valor_total}, ...]}
+        O subtotal de cada grupo (serviço + seus materiais) é calculado aqui.
     observacoes: texto livre
     tipo_pedido_label: rótulo do tipo de pedido (ex: "Personalização")
     data_validade: date - validade do orçamento (só para tipo='orcamento')
@@ -106,13 +109,35 @@ def gerar_pdf(tipo, prestador, cliente, itens, observacoes="", tipo_pedido_label
 
     pdf.set_font("Helvetica", "", 9)
     total_geral = 0
-    for item in itens:
-        pdf.cell(col_widths[0], 7, str(item["descricao"])[:50], border=1)
-        pdf.cell(col_widths[1], 7, f"{item['quantidade']:.2f}", border=1, align="C")
-        pdf.cell(col_widths[2], 7, f"{item['valor_unitario']:.2f}", border=1, align="C")
-        pdf.cell(col_widths[3], 7, f"{item['valor_total']:.2f}", border=1, align="C")
+    for grupo in grupos:
+        # Linha do serviço
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(col_widths[0], 7, str(grupo["descricao"])[:50], border=1)
+        pdf.cell(col_widths[1], 7, f"{grupo['quantidade']:.2f}", border=1, align="C")
+        pdf.cell(col_widths[2], 7, f"{grupo['valor_unitario']:.2f}", border=1, align="C")
+        pdf.cell(col_widths[3], 7, f"{grupo['valor_total']:.2f}", border=1, align="C")
         pdf.ln()
-        total_geral += item["valor_total"]
+
+        subtotal_grupo = grupo["valor_total"]
+
+        # Materiais (subitens) deste serviço, indentados
+        pdf.set_font("Helvetica", "", 8)
+        for mat in grupo.get("materiais", []):
+            pdf.cell(col_widths[0], 6, f"   > {str(mat['descricao'])[:45]}", border=1)
+            pdf.cell(col_widths[1], 6, f"{mat['quantidade']:.2f}", border=1, align="C")
+            pdf.cell(col_widths[2], 6, f"{mat['valor_unitario']:.2f}", border=1, align="C")
+            pdf.cell(col_widths[3], 6, f"{mat['valor_total']:.2f}", border=1, align="C")
+            pdf.ln()
+            subtotal_grupo += mat["valor_total"]
+
+        # Subtotal do grupo (só exibe se houver materiais - serviço sozinho já mostra o total na própria linha)
+        if grupo.get("materiais"):
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.cell(sum(col_widths[:3]), 6, "Subtotal do serviço", border=1, align="R")
+            pdf.cell(col_widths[3], 6, f"{subtotal_grupo:.2f}", border=1, align="C")
+            pdf.ln()
+
+        total_geral += subtotal_grupo
 
     pdf.ln(2)
     pdf.set_font("Helvetica", "B", 10)

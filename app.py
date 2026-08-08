@@ -38,7 +38,10 @@ if reabertas:
     st.error(f"🔴 {len(reabertas)} Ordem(ns) de Serviço reaberta(s) — atenção!")
     for os_ in reabertas:
         entrega = f" — entrega: {os_['data_entrega'].strftime('%d/%m/%Y')}" if os_["data_entrega"] else ""
-        st.write(f"**#{os_['id']}** {os_['cliente_nome']} ({TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])}){entrega}")
+        label = f"#{os_['id']} {os_['cliente_nome']} ({TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])}){entrega}"
+        if st.button(label, key=f"reaberta_{os_['id']}", use_container_width=True):
+            st.session_state["consultar_id_foco"] = os_["id"]
+            st.switch_page("pages/6_Consultar.py")
     st.divider()
 
 # --- Ordens recentes (não entregues) ---
@@ -63,11 +66,14 @@ else:
     for os_ in ordens_abertas:
         cor = STATUS_CORES.get(os_["status"], "")
         entrega = os_["data_entrega"].strftime("%d/%m/%Y") if os_["data_entrega"] else "sem data definida"
-        st.write(
-            f"{cor} **#{os_['id']}** {os_['cliente_nome']} — "
+        label = (
+            f"{cor} #{os_['id']} {os_['cliente_nome']} — "
             f"{TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])} — "
             f"{STATUS_LABELS.get(os_['status'], os_['status'])} — entrega: {entrega}"
         )
+        if st.button(label, key=f"aberta_{os_['id']}", use_container_width=True):
+            st.session_state["consultar_id_foco"] = os_["id"]
+            st.switch_page("pages/6_Consultar.py")
 
 st.divider()
 
@@ -95,10 +101,13 @@ else:
     for os_ in proximas_entregas:
         cor = STATUS_CORES.get(os_["status"], "")
         atraso = " ⚠️ atrasada" if os_["data_entrega"] < date.today() else ""
-        st.write(
-            f"{cor} **{os_['data_entrega'].strftime('%d/%m/%Y')}** — "
+        label = (
+            f"{cor} {os_['data_entrega'].strftime('%d/%m/%Y')} — "
             f"#{os_['id']} {os_['cliente_nome']} — {TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])}{atraso}"
         )
+        if st.button(label, key=f"entrega_{os_['id']}", use_container_width=True):
+            st.session_state["consultar_id_foco"] = os_["id"]
+            st.switch_page("pages/6_Consultar.py")
 
 st.divider()
 st.caption("Use o menu lateral para cadastros, criação de orçamentos e consultas.")

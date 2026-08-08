@@ -60,16 +60,24 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
 
 1. Cadastre o **Prestador de Serviço** (seus dados, aparecem no cabeçalho do PDF)
 2. Cadastre **Clientes**
-3. Cadastre **Serviços** e/ou **Matéria-Prima**
-4. Na página **Orçamento**, escolha o tipo de documento (Orçamento ou Ordem de Serviço),
-   o tipo de pedido (Confecção, Personalização ou Criação), o cliente, os itens e,
-   se quiser, anexe fotos de referência. Clique em "Salvar e Gerar PDF".
-5. Em **Consultar**, acompanhe todos os documentos, atualize o status
-   (Nova → Aguardando aprovação → Em atendimento → Entregue, ou Reaberta se precisar
-   retomar algo já entregue), e crie uma Ordem de Serviço direto a partir de um Orçamento
-   já aprovado.
+3. Cadastre **Serviços** e/ou **Matéria-Prima** (ou cadastre na hora, veja abaixo)
+4. Na página **Orçamento**: escolha o tipo de documento (Orçamento ou Ordem de
+   Serviço), o tipo de pedido (Confecção, Personalização ou Criação), o cliente,
+   adicione um ou mais **serviços** e, opcionalmente, **matéria-prima usada em
+   cada serviço** (a matéria-prima é sempre um subitem de um serviço específico,
+   não um item avulso). O subtotal de cada serviço soma seu valor + os materiais
+   dele; o total geral soma todos os serviços. Se quiser, anexe fotos de
+   referência. Clique em "Salvar e Gerar PDF".
+   - **Cadastro rápido**: os botões "➕ Novo serviço" e "➕ Novo" (material) abrem
+     um popup para cadastrar sem sair da tela de orçamento.
+5. Em **Consultar**, acompanhe todos os documentos, **edite** qualquer orçamento
+   ou ordem de serviço (botão "✏️ Editar"), atualize o status (Nova → Aguardando
+   aprovação → Em atendimento → Entregue, ou Reaberta se precisar retomar algo já
+   entregue), e crie uma Ordem de Serviço direto a partir de um Orçamento já
+   aprovado.
 6. O **Dashboard** (tela inicial) mostra Ordens de Serviço reabertas em destaque,
-   as ordens em aberto mais próximas da entrega, e uma agenda dos próximos 7 dias.
+   as ordens em aberto mais próximas da entrega, e uma agenda dos próximos 7 dias
+   — clique em qualquer uma para abrir os detalhes direto na tela Consultar.
 
 ## Sobre as fotos
 
@@ -77,4 +85,12 @@ As fotos anexadas ao orçamento/OS ficam no **Supabase Storage** (bucket `orcame
 não no banco de dados — isso evita estourar a cota de 500MB do Postgres free. O banco
 guarda apenas a URL pública de cada foto. Elas não entram no PDF, servem só como
 referência de consulta na tela.
+
+## Sobre performance
+
+As telas com muitos campos (como Orçamento) usam cache de 30 segundos
+(`fetch_all_cached`) nas listas de prestador/clientes/serviços/materiais, porque o
+Streamlit reexecuta o script inteiro a cada clique — sem cache, isso refazia as
+mesmas consultas ao banco a cada interação. Se você cadastrar algo novo e ele não
+aparecer imediatamente numa lista, aguarde alguns segundos ou recarregue a página.
 
