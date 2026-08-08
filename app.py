@@ -1,7 +1,9 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import streamlit as st
-from datetime import date, timedelta
-from database import init_db, query
-from constants import TIPO_PEDIDO_LABELS, STATUS_LABELS, STATUS_CORES
+from database import init_db
 
 st.set_page_config(
     page_title="Ateliê - Gestão",
@@ -21,93 +23,38 @@ except Exception as e:
     st.error(f"Erro ao conectar/preparar o banco de dados: {e}")
     st.stop()
 
-st.title("🧵 Gestão do Ateliê")
+# Todas as páginas precisam estar aqui para serem navegáveis (inclusive via
+# st.switch_page) - mas usamos position="hidden" para esconder o menu padrão
+# e desenhar o nosso próprio abaixo, deixando de fora só os links de
+# pages/51_Orcamento.py e pages/52_Ordem_Servico.py (acessíveis pelos botões
+# em "Novo" e em "Consultar", mas não devem aparecer como opção direta no menu).
+pagina_dashboard = st.Page("pages/0_Dashboard.py", title="Dashboard", icon="🧵", default=True)
+pagina_prestador = st.Page("pages/1_Prestador.py", title="Prestador")
+pagina_clientes = st.Page("pages/2_Clientes.py", title="Clientes")
+pagina_servicos = st.Page("pages/3_Servicos.py", title="Serviços")
+pagina_materia_prima = st.Page("pages/4_Materia_Prima.py", title="Matéria-Prima")
+pagina_novo = st.Page("pages/50_Novo.py", title="Novo")
+pagina_orcamento = st.Page("pages/51_Orcamento.py", title="Orçamento")
+pagina_ordem_servico = st.Page("pages/52_Ordem_Servico.py", title="Ordem de Serviço")
+pagina_consultar = st.Page("pages/6_Consultar.py", title="Consultar")
 
-# --- Reabertas primeiro (prioridade no dashboard) ---
-reabertas = query(
-    """
-    SELECT o.id, o.tipo_pedido, o.data_entrega, c.nome AS cliente_nome
-    FROM orcamentos o
-    JOIN clientes c ON c.id = o.cliente_id
-    WHERE o.tipo_operacao = 'ordem_servico' AND o.status = 'reaberta'
-    ORDER BY o.criado_em DESC
-    """
+pg = st.navigation(
+    [
+        pagina_dashboard, pagina_prestador, pagina_clientes, pagina_servicos,
+        pagina_materia_prima, pagina_novo, pagina_orcamento, pagina_ordem_servico,
+        pagina_consultar,
+    ],
+    position="hidden",
 )
 
-if reabertas:
-    st.error(f"🔴 {len(reabertas)} Ordem(ns) de Serviço reaberta(s) — atenção!")
-    for os_ in reabertas:
-        entrega = f" — entrega: {os_['data_entrega'].strftime('%d/%m/%Y')}" if os_["data_entrega"] else ""
-        label = f"#{os_['id']} {os_['cliente_nome']} ({TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])}){entrega}"
-        if st.button(label, key=f"reaberta_{os_['id']}", use_container_width=True):
-            st.session_state["consultar_id_foco"] = os_["id"]
-            st.switch_page("pages/6_Consultar.py")
-    st.divider()
+# Menu lateral customizado - só os links que devem aparecer
+with st.sidebar:
+    st.page_link(pagina_dashboard, label="Dashboard", icon="🧵")
+    st.page_link(pagina_prestador, label="Prestador")
+    st.page_link(pagina_clientes, label="Clientes")
+    st.page_link(pagina_servicos, label="Serviços")
+    st.page_link(pagina_materia_prima, label="Matéria-Prima")
+    st.page_link(pagina_novo, label="Novo")
+    st.page_link(pagina_consultar, label="Consultar")
 
-# --- Ordens recentes (não entregues) ---
-st.subheader("📋 Ordens de Serviço em aberto")
-
-ordens_abertas = query(
-    """
-    SELECT o.id, o.tipo_pedido, o.status, o.data_entrega, c.nome AS cliente_nome
-    FROM orcamentos o
-    JOIN clientes c ON c.id = o.cliente_id
-    WHERE o.tipo_operacao = 'ordem_servico' AND o.status != 'entregue'
-    ORDER BY
-        CASE WHEN o.status = 'reaberta' THEN 0 ELSE 1 END,
-        o.data_entrega ASC NULLS LAST
-    LIMIT 10
-    """
-)
-
-if not ordens_abertas:
-    st.info("Nenhuma ordem de serviço em aberto no momento.")
-else:
-    for os_ in ordens_abertas:
-        cor = STATUS_CORES.get(os_["status"], "")
-        entrega = os_["data_entrega"].strftime("%d/%m/%Y") if os_["data_entrega"] else "sem data definida"
-        label = (
-            f"{cor} #{os_['id']} {os_['cliente_nome']} — "
-            f"{TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])} — "
-            f"{STATUS_LABELS.get(os_['status'], os_['status'])} — entrega: {entrega}"
-        )
-        if st.button(label, key=f"aberta_{os_['id']}", use_container_width=True):
-            st.session_state["consultar_id_foco"] = os_["id"]
-            st.switch_page("pages/6_Consultar.py")
-
-st.divider()
-
-# --- Agenda: próximas entregas (7 dias) ---
-st.subheader("📅 Próximas entregas (7 dias)")
-
-limite = date.today() + timedelta(days=7)
-proximas_entregas = query(
-    """
-    SELECT o.id, o.tipo_pedido, o.status, o.data_entrega, c.nome AS cliente_nome
-    FROM orcamentos o
-    JOIN clientes c ON c.id = o.cliente_id
-    WHERE o.tipo_operacao = 'ordem_servico'
-        AND o.status != 'entregue'
-        AND o.data_entrega IS NOT NULL
-        AND o.data_entrega <= %s
-    ORDER BY o.data_entrega ASC
-    """,
-    (limite,),
-)
-
-if not proximas_entregas:
-    st.info("Nenhuma entrega prevista para os próximos 7 dias.")
-else:
-    for os_ in proximas_entregas:
-        cor = STATUS_CORES.get(os_["status"], "")
-        atraso = " ⚠️ atrasada" if os_["data_entrega"] < date.today() else ""
-        label = (
-            f"{cor} {os_['data_entrega'].strftime('%d/%m/%Y')} — "
-            f"#{os_['id']} {os_['cliente_nome']} — {TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])}{atraso}"
-        )
-        if st.button(label, key=f"entrega_{os_['id']}", use_container_width=True):
-            st.session_state["consultar_id_foco"] = os_["id"]
-            st.switch_page("pages/6_Consultar.py")
-
-st.divider()
-st.caption("Use o menu lateral para cadastros, criação de orçamentos e consultas.")
+pg.run()

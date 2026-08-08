@@ -3,7 +3,7 @@ Constantes compartilhadas entre as páginas: tipos de pedido, status, labels.
 """
 
 TIPO_PEDIDO_LABELS = {
-    "confeccao": "Orçamento de Confecção",
+    "confeccao": "Confecção",
     "personalizacao": "Personalização",
     "criacao": "Criação",
 }

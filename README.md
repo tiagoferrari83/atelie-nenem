@@ -44,7 +44,8 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
 
 ## Estrutura
 
-- `app.py` — dashboard: OS reabertas, OS em aberto e agenda de próximas entregas
+- `app.py` — roteador da navegação (menu lateral customizado) e inicialização do banco
+- `pages/0_Dashboard.py` — dashboard: OS reabertas, OS em aberto e agenda de próximas entregas
 - `database.py` — conexão com Supabase e criação/atualização das tabelas
 - `constants.py` — labels e opções de tipo de pedido, status, etc.
 - `storage.py` — upload/exclusão de fotos no Supabase Storage
@@ -52,11 +53,12 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
 - `pages/2_Clientes.py` — cadastro de clientes
 - `pages/3_Servicos.py` — cadastro de serviços (por unidade, tempo ou metro)
 - `pages/4_Materia_Prima.py` — cadastro de matéria-prima (por unidade, metro ou peso)
-- `pages/5_Novo.py` — tela de escolha: Orçamento ou Ordem de Serviço
-- `pages/51_Orcamento.py` — formulário de Orçamento (usa `formulario_orcamento.py`)
-- `pages/52_Ordem_Servico.py` — formulário de Ordem de Serviço (usa `formulario_orcamento.py`)
+- `pages/50_Novo.py` — tela de escolha: Orçamento ou Ordem de Serviço
+- `pages/51_Orcamento.py` — formulário de Orçamento (usa `formulario_orcamento.py`) — não aparece
+  no menu lateral, só é acessível pelos botões em "Novo" ou "Editar"/"Criar OS" em Consultar
+- `pages/52_Ordem_Servico.py` — formulário de Ordem de Serviço (idem acima) — também oculto do menu
 - `formulario_orcamento.py` — lógica compartilhada dos dois formulários acima
-- `pages/6_Consultar.py` — consulta documentos, atualiza status, gera OS a partir de orçamento
+- `pages/6_Consultar.py` — consulta documentos, edita, exclui, atualiza status, gera OS a partir de orçamento
 - `pdf_generator.py` — geração dos PDFs de orçamento/ordem de serviço
 
 ## Fluxo de uso
