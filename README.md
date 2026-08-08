@@ -64,9 +64,11 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
 ## Fluxo de uso
 
 1. Cadastre o **Prestador de Serviço** (seus dados, aparecem no cabeçalho do PDF)
-2. Cadastre **Clientes** (pode usar a busca por nome/telefone/email para encontrar rápido)
-3. Cadastre **Serviços** e/ou **Matéria-Prima** (busca por nome disponível em Serviços)
-   (ou cadastre na hora, veja abaixo)
+2. Cadastre **Clientes** (busca por nome/telefone/email disponível)
+3. Cadastre **Serviços** e/ou **Matéria-Prima** (busca por nome disponível nas duas)
+   (ou cadastre na hora, veja abaixo). Em Clientes, Serviços e Matéria-Prima é
+   possível **editar** qualquer registro (botão "✏️ Editar", abre um popup) -
+   cada um mostra a data de cadastro e da última edição.
 4. No menu **Novo**, escolha se vai criar um Orçamento ou uma Ordem de Serviço
    (são duas telas separadas, para não confundir os dois fluxos). Em qualquer
    uma: escolha o tipo de pedido (Confecção, Personalização ou Criação), o

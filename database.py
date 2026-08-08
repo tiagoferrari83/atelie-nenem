@@ -56,7 +56,8 @@ def init_db():
             telefone TEXT,
             email TEXT,
             endereco TEXT,
-            criado_em TIMESTAMP DEFAULT NOW()
+            criado_em TIMESTAMP DEFAULT NOW(),
+            atualizado_em TIMESTAMP DEFAULT NOW()
         );
     """)
 
@@ -67,7 +68,8 @@ def init_db():
             nome TEXT NOT NULL,
             tipo_cobranca TEXT NOT NULL CHECK (tipo_cobranca IN ('unidade', 'tempo', 'metro')),
             valor NUMERIC(10, 2) NOT NULL,
-            criado_em TIMESTAMP DEFAULT NOW()
+            criado_em TIMESTAMP DEFAULT NOW(),
+            atualizado_em TIMESTAMP DEFAULT NOW()
         );
     """)
 
@@ -78,8 +80,39 @@ def init_db():
             nome TEXT NOT NULL,
             tipo_medida TEXT NOT NULL CHECK (tipo_medida IN ('unidade', 'metro', 'peso')),
             valor NUMERIC(10, 2) NOT NULL,
-            criado_em TIMESTAMP DEFAULT NOW()
+            criado_em TIMESTAMP DEFAULT NOW(),
+            atualizado_em TIMESTAMP DEFAULT NOW()
         );
+    """)
+
+    # Compatibilidade: adiciona atualizado_em em bancos criados antes desta versão
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'clientes' AND column_name = 'atualizado_em'
+            ) THEN
+                ALTER TABLE clientes ADD COLUMN atualizado_em TIMESTAMP DEFAULT NOW();
+                UPDATE clientes SET atualizado_em = criado_em WHERE atualizado_em IS NULL;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'servicos' AND column_name = 'atualizado_em'
+            ) THEN
+                ALTER TABLE servicos ADD COLUMN atualizado_em TIMESTAMP DEFAULT NOW();
+                UPDATE servicos SET atualizado_em = criado_em WHERE atualizado_em IS NULL;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'materia_prima' AND column_name = 'atualizado_em'
+            ) THEN
+                ALTER TABLE materia_prima ADD COLUMN atualizado_em TIMESTAMP DEFAULT NOW();
+                UPDATE materia_prima SET atualizado_em = criado_em WHERE atualizado_em IS NULL;
+            END IF;
+        END $$;
     """)
 
     # Orçamentos / Ordens de serviço

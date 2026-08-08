@@ -10,6 +10,34 @@ TIPO_LABELS = {
     "metro": "Por metro",
 }
 
+
+@st.dialog("Editar serviço")
+def dialog_editar_servico(servico):
+    nome = st.text_input("Nome do serviço", value=servico["nome"])
+    tipo_cobranca = st.selectbox(
+        "Tipo de cobrança",
+        options=list(TIPO_LABELS.keys()),
+        format_func=lambda x: TIPO_LABELS[x],
+        index=list(TIPO_LABELS.keys()).index(servico["tipo_cobranca"]),
+    )
+    valor = st.number_input("Valor (R$)", min_value=0.0, step=0.5, format="%.2f", value=float(servico["valor"]))
+
+    if st.button("Salvar alterações", type="primary"):
+        if not nome:
+            st.error("O nome é obrigatório.")
+        else:
+            execute(
+                """
+                UPDATE servicos
+                SET nome = %s, tipo_cobranca = %s, valor = %s, atualizado_em = NOW()
+                WHERE id = %s
+                """,
+                (nome, tipo_cobranca, valor, servico["id"]),
+            )
+            st.success("Serviço atualizado!")
+            st.rerun()
+
+
 with st.form("form_servico", clear_on_submit=True):
     st.subheader("Novo serviço")
     nome = st.text_input("Nome do serviço")
@@ -52,8 +80,15 @@ if not servicos:
 else:
     for s in servicos:
         with st.expander(f"{s['nome']} — R$ {s['valor']:.2f} ({TIPO_LABELS[s['tipo_cobranca']]})"):
+            st.caption(
+                f"Cadastrado em {s['criado_em'].strftime('%d/%m/%Y %H:%M')} — "
+                f"última edição em {s['atualizado_em'].strftime('%d/%m/%Y %H:%M')}"
+            )
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("Excluir", key=f"del_servico_{s['id']}"):
+                if st.button("✏️ Editar", key=f"edit_servico_{s['id']}"):
+                    dialog_editar_servico(s)
+            with col2:
+                if st.button("🗑️ Excluir", key=f"del_servico_{s['id']}"):
                     execute("DELETE FROM servicos WHERE id = %s", (s["id"],))
                     st.rerun()
