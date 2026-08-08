@@ -149,7 +149,7 @@ else:
 
             st.divider()
 
-            col_btn1, col_btn2, col_btn3 = st.columns(3)
+            col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
 
             with col_btn1:
                 if st.button("✏️ Editar", key=f"editar_{doc['id']}"):
@@ -167,7 +167,8 @@ else:
                             for g in grupos
                         ],
                     }
-                    st.switch_page("pages/5_Orcamento.py")
+                    pagina_destino = "pages/5a_Orcamento.py" if doc["tipo_operacao"] == "orcamento" else "pages/5b_Ordem_Servico.py"
+                    st.switch_page(pagina_destino)
 
             with col_btn2:
                 if st.button("🔄 Gerar PDF novamente", key=f"pdf_{doc['id']}"):
@@ -230,4 +231,35 @@ else:
                                 for g in grupos
                             ],
                         }
-                        st.switch_page("pages/5_Orcamento.py")
+                        st.switch_page("pages/5b_Ordem_Servico.py")
+
+            with col_btn4:
+                chave_confirmacao = f"confirmar_exclusao_{doc['id']}"
+                if not st.session_state.get(chave_confirmacao):
+                    if st.button("🗑️ Excluir", key=f"excluir_{doc['id']}"):
+                        st.session_state[chave_confirmacao] = True
+                        st.rerun()
+                else:
+                    st.warning("Excluir permanentemente? Essa ação não pode ser desfeita.")
+                    col_conf1, col_conf2 = st.columns(2)
+                    with col_conf1:
+                        if st.button("Sim, excluir", key=f"confirmar_sim_{doc['id']}", type="primary"):
+                            # Exclui as fotos do Storage antes de remover o registro do banco
+                            fotos_do_doc = query(
+                                "SELECT storage_path FROM orcamento_fotos WHERE orcamento_id = %s",
+                                (doc["id"],),
+                            )
+                            for f in fotos_do_doc:
+                                try:
+                                    excluir_foto(f["storage_path"])
+                                except Exception:
+                                    pass
+                            # O DELETE em orcamentos já remove itens e fotos em cascata (ON DELETE CASCADE)
+                            execute("DELETE FROM orcamentos WHERE id = %s", (doc["id"],))
+                            del st.session_state[chave_confirmacao]
+                            st.success("Excluído com sucesso.")
+                            st.rerun()
+                    with col_conf2:
+                        if st.button("Cancelar", key=f"confirmar_nao_{doc['id']}"):
+                            del st.session_state[chave_confirmacao]
+                            st.rerun()
