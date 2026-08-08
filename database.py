@@ -20,16 +20,14 @@ def _get_cached_connection():
 
 
 def get_connection():
-    """Retorna a conexão cacheada, reconectando automaticamente se ela tiver caído."""
-    conn = _get_cached_connection()
-    try:
-        # Testa se a conexão ainda está viva (pode cair por timeout de rede/pooler)
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1;")
-    except (psycopg2.OperationalError, psycopg2.InterfaceError):
-        _get_cached_connection.clear()
-        conn = _get_cached_connection()
-    return conn
+    """Retorna a conexão cacheada."""
+    return _get_cached_connection()
+
+
+def _reconectar():
+    """Força a criação de uma nova conexão (usado quando a conexão cacheada caiu)."""
+    _get_cached_connection.clear()
+    return _get_cached_connection()
 
 
 def init_db():
@@ -199,37 +197,62 @@ def init_db():
 # ---------- Funções genéricas de CRUD ----------
 
 def fetch_all(table, order_by="id"):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(f"SELECT * FROM {table} ORDER BY {order_by};")
-    rows = cur.fetchall()
-    cur.close()
-    return rows
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(f"SELECT * FROM {table} ORDER BY {order_by};")
+        rows = cur.fetchall()
+        cur.close()
+        return rows
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        conn = _reconectar()
+        cur = conn.cursor()
+        cur.execute(f"SELECT * FROM {table} ORDER BY {order_by};")
+        rows = cur.fetchall()
+        cur.close()
+        return rows
 
 
 def query(sql, params=None):
     """Executa um SELECT customizado (ex: com JOIN) e retorna as linhas."""
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(sql, params or ())
-    rows = cur.fetchall()
-    cur.close()
-    return rows
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(sql, params or ())
+        rows = cur.fetchall()
+        cur.close()
+        return rows
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        conn = _reconectar()
+        cur = conn.cursor()
+        cur.execute(sql, params or ())
+        rows = cur.fetchall()
+        cur.close()
+        return rows
 
 
 def execute(sql, params=None):
     """Executa INSERT/UPDATE/DELETE. Retorna o id gerado, se houver RETURNING."""
-    conn = get_connection()
-    cur = conn.cursor()
     try:
+        conn = get_connection()
+        cur = conn.cursor()
         cur.execute(sql, params or ())
         result = None
         if cur.description:
             result = cur.fetchone()
         conn.commit()
+        cur.close()
+        return result
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        conn = _reconectar()
+        cur = conn.cursor()
+        cur.execute(sql, params or ())
+        result = None
+        if cur.description:
+            result = cur.fetchone()
+        conn.commit()
+        cur.close()
         return result
     except Exception:
         conn.rollback()
         raise
-    finally:
-        cur.close()

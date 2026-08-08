@@ -9,9 +9,14 @@ st.set_page_config(
     layout="centered",
 )
 
-# Cria/atualiza as tabelas no banco toda vez que o app sobe
-try:
+# Cria/atualiza as tabelas no banco - roda só uma vez (cacheado), não a cada clique
+@st.cache_resource(show_spinner=False)
+def _init_db_once():
     init_db()
+    return True
+
+try:
+    _init_db_once()
 except Exception as e:
     st.error(f"Erro ao conectar/preparar o banco de dados: {e}")
     st.stop()
@@ -61,7 +66,7 @@ else:
         st.write(
             f"{cor} **#{os_['id']}** {os_['cliente_nome']} — "
             f"{TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])} — "
-            f"{STATUS_LABELS[os_['status']]} — entrega: {entrega}"
+            f"{STATUS_LABELS.get(os_['status'], os_['status'])} — entrega: {entrega}"
         )
 
 st.divider()
