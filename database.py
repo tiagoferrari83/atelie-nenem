@@ -222,8 +222,17 @@ def fetch_all_cached(table, order_by="id"):
     à toa, o que é a maior causa de lentidão em telas como a de Orçamento.
     Não usar para dados que precisam refletir uma escrita feita no mesmo rerun
     (ex: logo após um INSERT, quando a tela precisa mostrar o registro novo).
+
+    Retorna list[dict] puro, com qualquer campo memoryview (colunas BYTEA,
+    como o logo do prestador) convertido para bytes - st.cache_data precisa
+    serializar (pickle) o valor para guardar em cache, e memoryview não é
+    serializável dessa forma.
     """
-    return fetch_all(table, order_by)
+    rows = fetch_all(table, order_by)
+    return [
+        {k: (bytes(v) if isinstance(v, memoryview) else v) for k, v in row.items()}
+        for row in rows
+    ]
 
 
 def query(sql, params=None):
