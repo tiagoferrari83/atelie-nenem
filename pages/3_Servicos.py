@@ -39,10 +39,16 @@ with st.form("form_servico", clear_on_submit=True):
 st.divider()
 st.subheader("Serviços cadastrados")
 
+busca = st.text_input("🔎 Buscar serviço", placeholder="Digite o nome do serviço...")
+
 servicos = fetch_all("servicos", order_by="nome")
 
+if busca:
+    busca_lower = busca.lower()
+    servicos = [s for s in servicos if busca_lower in (s["nome"] or "").lower()]
+
 if not servicos:
-    st.info("Nenhum serviço cadastrado ainda.")
+    st.info("Nenhum serviço encontrado." if busca else "Nenhum serviço cadastrado ainda.")
 else:
     for s in servicos:
         with st.expander(f"{s['nome']} — R$ {s['valor']:.2f} ({TIPO_LABELS[s['tipo_cobranca']]})"):

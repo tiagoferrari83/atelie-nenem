@@ -64,8 +64,9 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
 ## Fluxo de uso
 
 1. Cadastre o **Prestador de Serviço** (seus dados, aparecem no cabeçalho do PDF)
-2. Cadastre **Clientes**
-3. Cadastre **Serviços** e/ou **Matéria-Prima** (ou cadastre na hora, veja abaixo)
+2. Cadastre **Clientes** (pode usar a busca por nome/telefone/email para encontrar rápido)
+3. Cadastre **Serviços** e/ou **Matéria-Prima** (busca por nome disponível em Serviços)
+   (ou cadastre na hora, veja abaixo)
 4. No menu **Novo**, escolha se vai criar um Orçamento ou uma Ordem de Serviço
    (são duas telas separadas, para não confundir os dois fluxos). Em qualquer
    uma: escolha o tipo de pedido (Confecção, Personalização ou Criação), o
@@ -76,12 +77,17 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
    fotos de referência. Clique em "Salvar e Gerar PDF".
    - **Cadastro rápido**: os botões "➕ Novo serviço" e "➕ Novo" (material) abrem
      um popup para cadastrar sem sair da tela de orçamento.
-5. Em **Consultar**, acompanhe todos os documentos, **edite** (botão "✏️ Editar")
-   ou **exclua** (botão "🗑️ Excluir", com confirmação) qualquer orçamento ou
-   ordem de serviço, atualize o status (Nova → Aguardando aprovação → Em
-   atendimento → Entregue, ou Reaberta se precisar retomar algo já entregue), e
-   crie uma Ordem de Serviço direto a partir de um Orçamento já aprovado (os
-   itens vêm todos preenchidos automaticamente).
+5. Na tela **Consultar**, os documentos ficam divididos em duas abas: **Orçamento**
+   e **Ordem de Serviço**, cada uma com seus próprios filtros e status:
+   - **Status de Orçamento**: Aguardando Aprovação (🟡) → Aprovado (🟢) ou Vencido (🔴).
+     "Vencido" é calculado automaticamente quando a data de validade passa (e só se
+     o orçamento ainda estiver "Aguardando Aprovação" — uma vez aprovado, nunca vence).
+     O botão **"✅ Aprovar Orçamento"** marca o orçamento como aprovado e já leva
+     direto para criar a Ordem de Serviço com os itens preenchidos.
+   - **Status de Ordem de Serviço**: Nova → Aguardando aprovação → Em atendimento →
+     Entregue, ou Reaberta se precisar retomar algo já entregue.
+   - Em qualquer aba: **edite** (botão "✏️ Editar") ou **exclua** (botão "🗑️ Excluir",
+     com popup de confirmação) qualquer documento.
 6. O **Dashboard** (tela inicial) mostra Ordens de Serviço reabertas em destaque,
    as ordens em aberto mais próximas da entrega, e uma agenda dos próximos 7 dias
    — clique em qualquer uma para abrir os detalhes direto na tela Consultar.

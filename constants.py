@@ -13,6 +13,7 @@ TIPO_OPERACAO_LABELS = {
     "ordem_servico": "Ordem de Serviço",
 }
 
+# Status de Ordem de Serviço
 STATUS_LABELS = {
     "nova": "Nova",
     "aguardando_aprovacao": "Aguardando aprovação",
@@ -21,7 +22,7 @@ STATUS_LABELS = {
     "reaberta": "Reaberta",
 }
 
-# Ordem em que os status aparecem em selects
+# Ordem em que os status de OS aparecem em selects
 STATUS_ORDEM = ["nova", "aguardando_aprovacao", "em_atendimento", "entregue", "reaberta"]
 
 STATUS_CORES = {
@@ -30,6 +31,23 @@ STATUS_CORES = {
     "em_atendimento": "🟠",
     "entregue": "🟢",
     "reaberta": "🔴",
+}
+
+# Status de Orçamento (próprios, diferentes dos de OS)
+# "aprovado" pode ser marcado manualmente OU automaticamente pelo botão "Aprovar Orçamento".
+# "vencido" é calculado automaticamente (data_validade < hoje) e nunca sobrescreve "aprovado".
+STATUS_ORCAMENTO_LABELS = {
+    "aguardando_aprovacao": "Aguardando Aprovação",
+    "aprovado": "Aprovado",
+    "vencido": "Vencido",
+}
+
+STATUS_ORCAMENTO_ORDEM = ["aguardando_aprovacao", "aprovado", "vencido"]
+
+STATUS_ORCAMENTO_CORES = {
+    "aguardando_aprovacao": "🟡",
+    "aprovado": "🟢",
+    "vencido": "🔴",
 }
 
 TIPO_LABELS_SERVICO = {"unidade": "un.", "tempo": "h", "metro": "m"}

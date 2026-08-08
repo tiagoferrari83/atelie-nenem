@@ -313,16 +313,19 @@ def render(tipo_operacao_fixo):
             # Remove os itens antigos (cascade também remove materiais filhos) para substituir pelos atuais
             execute("DELETE FROM orcamento_itens WHERE orcamento_id = %s", (orcamento_id,))
         else:
-            # Modo criação: insere um novo documento
+            # Modo criação: insere um novo documento.
+            # Status inicial: Orçamento começa "aguardando_aprovacao" (status próprio de
+            # orçamento), Ordem de Serviço começa "nova" (status próprio de OS).
+            status_inicial = "aguardando_aprovacao" if tipo_operacao == "orcamento" else "nova"
             resultado = execute(
                 """
                 INSERT INTO orcamentos
-                    (cliente_id, tipo_operacao, tipo_pedido, observacoes, data_validade, data_entrega, orcamento_origem_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    (cliente_id, tipo_operacao, tipo_pedido, status, observacoes, data_validade, data_entrega, orcamento_origem_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
-                    cliente_selecionado["id"], tipo_operacao, tipo_pedido, observacoes,
+                    cliente_selecionado["id"], tipo_operacao, tipo_pedido, status_inicial, observacoes,
                     data_validade, data_entrega, origem["orcamento_id"] if origem else None,
                 ),
             )

@@ -90,7 +90,10 @@ def init_db():
             tipo_operacao TEXT NOT NULL CHECK (tipo_operacao IN ('orcamento', 'ordem_servico')),
             tipo_pedido TEXT NOT NULL CHECK (tipo_pedido IN ('confeccao', 'personalizacao', 'criacao')),
             status TEXT NOT NULL DEFAULT 'nova' CHECK (
-                status IN ('nova', 'aguardando_aprovacao', 'em_atendimento', 'entregue', 'reaberta')
+                status IN (
+                    'nova', 'aguardando_aprovacao', 'em_atendimento', 'entregue', 'reaberta',
+                    'aprovado', 'vencido'
+                )
             ),
             observacoes TEXT,
             data_validade DATE,
@@ -141,15 +144,36 @@ def init_db():
         END $$;
     """)
 
-    # Corrige registros antigos com status fora dos valores válidos atuais
+    # Corrige registros antigos com status fora dos valores válidos atuais - cada
+    # tipo_operacao tem seu próprio conjunto de status válidos
     cur.execute("""
         UPDATE orcamentos
         SET status = 'nova'
-        WHERE status IS NULL
-           OR status NOT IN ('nova', 'aguardando_aprovacao', 'em_atendimento', 'entregue', 'reaberta');
+        WHERE tipo_operacao = 'ordem_servico'
+          AND (status IS NULL
+               OR status NOT IN ('nova', 'aguardando_aprovacao', 'em_atendimento', 'entregue', 'reaberta'));
+    """)
+    cur.execute("""
+        UPDATE orcamentos
+        SET status = 'aguardando_aprovacao'
+        WHERE tipo_operacao = 'orcamento'
+          AND (status IS NULL
+               OR status NOT IN ('aguardando_aprovacao', 'aprovado', 'vencido'));
     """)
 
-    # Garante que a constraint de status reflete os valores atuais
+    # Marca como "vencido" todo orçamento ainda aguardando aprovação cuja validade já passou
+    # (nunca sobrescreve "aprovado" - uma vez aprovado, o orçamento fica aprovado)
+    cur.execute("""
+        UPDATE orcamentos
+        SET status = 'vencido'
+        WHERE tipo_operacao = 'orcamento'
+          AND status = 'aguardando_aprovacao'
+          AND data_validade IS NOT NULL
+          AND data_validade < CURRENT_DATE;
+    """)
+
+    # Garante que a constraint de status reflete os valores atuais (união dos
+    # status de OS e de Orçamento, já que é a mesma coluna para os dois tipos)
     cur.execute("""
         DO $$
         BEGIN
@@ -160,7 +184,10 @@ def init_db():
                 ALTER TABLE orcamentos DROP CONSTRAINT orcamentos_status_check;
             END IF;
             ALTER TABLE orcamentos ADD CONSTRAINT orcamentos_status_check
-                CHECK (status IN ('nova', 'aguardando_aprovacao', 'em_atendimento', 'entregue', 'reaberta'));
+                CHECK (status IN (
+                    'nova', 'aguardando_aprovacao', 'em_atendimento', 'entregue', 'reaberta',
+                    'aprovado', 'vencido'
+                ));
             ALTER TABLE orcamentos ALTER COLUMN status SET DEFAULT 'nova';
         END $$;
     """)
@@ -367,3 +394,21 @@ def montar_grupos_orcamento(orcamento_id):
                 grupos[0]["materiais"].append(material)
 
     return grupos
+
+
+def marcar_orcamentos_vencidos():
+    """
+    Atualiza para 'vencido' todo orçamento que ainda está 'aguardando_aprovacao'
+    e cuja data_validade já passou. Nunca mexe em orçamentos já 'aprovado' -
+    uma vez aprovado, o orçamento permanece aprovado mesmo após a validade.
+    Chamada na tela Consultar (não só no boot do app) para refletir vencimentos
+    que aconteceram durante o dia, sem precisar reiniciar o servidor.
+    """
+    execute("""
+        UPDATE orcamentos
+        SET status = 'vencido'
+        WHERE tipo_operacao = 'orcamento'
+          AND status = 'aguardando_aprovacao'
+          AND data_validade IS NOT NULL
+          AND data_validade < CURRENT_DATE
+    """)

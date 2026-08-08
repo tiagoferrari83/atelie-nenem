@@ -29,10 +29,21 @@ with st.form("form_cliente", clear_on_submit=True):
 st.divider()
 st.subheader("Clientes cadastrados")
 
+busca = st.text_input("🔎 Buscar cliente", placeholder="Digite o nome, telefone ou email...")
+
 clientes = fetch_all("clientes", order_by="nome")
 
+if busca:
+    busca_lower = busca.lower()
+    clientes = [
+        c for c in clientes
+        if busca_lower in (c["nome"] or "").lower()
+        or busca_lower in (c["telefone"] or "").lower()
+        or busca_lower in (c["email"] or "").lower()
+    ]
+
 if not clientes:
-    st.info("Nenhum cliente cadastrado ainda.")
+    st.info("Nenhum cliente encontrado." if busca else "Nenhum cliente cadastrado ainda.")
 else:
     for c in clientes:
         with st.expander(f"{c['nome']}"):
