@@ -1,5 +1,6 @@
 import streamlit as st
-from database import fetch_all, execute
+from database import fetch_all, query, execute
+from storage import excluir_foto
 
 st.title("👤 Clientes")
 
@@ -24,6 +25,73 @@ def dialog_editar_cliente(cliente):
                 (nome, telefone, email, endereco, cliente["id"]),
             )
             st.success("Cliente atualizado!")
+            st.rerun()
+
+
+def _excluir_cliente_e_documentos(cliente_id, documentos_vinculados):
+    """
+    Apaga o cliente e todos os orçamentos/OS vinculados a ele.
+    cliente_id em orcamentos NÃO tem ON DELETE CASCADE (de propósito, para não
+    apagar documentos sem aviso em nenhum outro fluxo) - por isso os orçamentos
+    precisam ser apagados explicitamente aqui, antes do cliente. Cada orçamento
+    apagado já leva junto seus itens e fotos no banco (essas sim têm cascade).
+    Só as fotos no Storage (fora do Postgres) precisam ser limpas manualmente.
+    """
+    for doc in documentos_vinculados:
+        fotos_do_doc = query(
+            "SELECT storage_path FROM orcamento_fotos WHERE orcamento_id = %s",
+            (doc["id"],),
+        )
+        for f in fotos_do_doc:
+            try:
+                excluir_foto(f["storage_path"])
+            except Exception:
+                pass
+        execute("DELETE FROM orcamentos WHERE id = %s", (doc["id"],))
+
+    execute("DELETE FROM clientes WHERE id = %s", (cliente_id,))
+
+
+@st.dialog("Excluir cliente")
+def dialog_excluir_cliente(cliente):
+    documentos_vinculados = query(
+        """
+        SELECT id, tipo_operacao, tipo_pedido, criado_em
+        FROM orcamentos
+        WHERE cliente_id = %s
+        ORDER BY criado_em DESC
+        """,
+        (cliente["id"],),
+    )
+
+    if not documentos_vinculados:
+        st.warning(f"Excluir **{cliente['nome']}** permanentemente? Essa ação não pode ser desfeita.")
+    else:
+        n_orcamentos = sum(1 for d in documentos_vinculados if d["tipo_operacao"] == "orcamento")
+        n_os = sum(1 for d in documentos_vinculados if d["tipo_operacao"] == "ordem_servico")
+        partes = []
+        if n_orcamentos:
+            partes.append(f"{n_orcamentos} orçamento(s)")
+        if n_os:
+            partes.append(f"{n_os} ordem(ns) de serviço")
+        st.warning(
+            f"**{cliente['nome']}** tem {' e '.join(partes)} vinculado(s). "
+            f"Excluir o cliente vai apagar **também** todos esses documentos "
+            f"(itens e fotos inclusos). Essa ação não pode ser desfeita."
+        )
+        with st.expander("Ver documentos que serão apagados"):
+            for d in documentos_vinculados:
+                tipo_label = "Orçamento" if d["tipo_operacao"] == "orcamento" else "Ordem de Serviço"
+                st.write(f"- #{d['id']} — {tipo_label} — {d['criado_em'].strftime('%d/%m/%Y')}")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Sim, excluir tudo" if documentos_vinculados else "Sim, excluir", type="primary", use_container_width=True):
+            _excluir_cliente_e_documentos(cliente["id"], documentos_vinculados)
+            st.success("Excluído com sucesso.")
+            st.rerun()
+    with col2:
+        if st.button("Cancelar", use_container_width=True):
             st.rerun()
 
 
@@ -86,5 +154,4 @@ else:
                     dialog_editar_cliente(c)
             with col2:
                 if st.button("🗑️ Excluir", key=f"del_cliente_{c['id']}"):
-                    execute("DELETE FROM clientes WHERE id = %s", (c["id"],))
-                    st.rerun()
+                    dialog_excluir_cliente(c)
