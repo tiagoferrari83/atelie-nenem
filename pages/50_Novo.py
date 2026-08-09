@@ -20,6 +20,6 @@ with col2:
 st.divider()
 st.caption(
     "Dica: se o cliente já aprovou um orçamento existente, use o botão "
-    "\"➡️ Criar OS a partir daqui\" na tela Consultar em vez de começar do zero aqui - "
+    "\"✅ Aprovar Orçamento\" na tela Consultar em vez de começar do zero aqui - "
     "assim os itens do orçamento já vêm preenchidos."
 )
