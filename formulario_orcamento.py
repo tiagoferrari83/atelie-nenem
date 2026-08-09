@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from database import fetch_all_cached, query, execute
 from pdf_generator import gerar_pdf
 from storage import upload_foto, excluir_foto
-from constants import TIPO_PEDIDO_LABELS, TIPO_LABELS_SERVICO, TIPO_LABELS_MATERIAL
+from constants import TIPO_PEDIDO_LABELS, TIPO_LABELS_SERVICO, TIPO_LABELS_MATERIAL, formatar_moeda
 
 
 def render(tipo_operacao_fixo):
@@ -178,7 +178,7 @@ def render(tipo_operacao_fixo):
     with col_srv:
         if servicos:
             servico_opcoes = {
-                f"{s['nome']} (R$ {s['valor']:.2f}/{TIPO_LABELS_SERVICO[s['tipo_cobranca']]})": s for s in servicos
+                f"{s['nome']} (R$ {formatar_moeda(float(s['valor']))}/{TIPO_LABELS_SERVICO[s['tipo_cobranca']]})": s for s in servicos
             }
             servico_escolhido = st.selectbox("Serviço", options=list(servico_opcoes.keys()), key="sel_servico")
             qtd_servico = st.number_input("Quantidade do serviço", min_value=0.0, step=0.5, key="qtd_servico")
@@ -232,7 +232,7 @@ def render(tipo_operacao_fixo):
                 with col_a:
                     st.markdown(
                         f"**{servico_item['descricao']}** — {servico_item['quantidade']:.2f} x "
-                        f"R$ {servico_item['valor_unitario']:.2f} = R$ {servico_item['valor_total']:.2f}"
+                        f"R$ {formatar_moeda(servico_item['valor_unitario'])} = R$ {formatar_moeda(servico_item['valor_total'])}"
                     )
                 with col_b:
                     if st.button("Remover serviço", key=f"rem_servico_{idx_grupo}"):
@@ -247,7 +247,7 @@ def render(tipo_operacao_fixo):
                         with col_m1:
                             st.write(
                                 f"　↳ {mat['descricao']} — {mat['quantidade']:.2f} x "
-                                f"R$ {mat['valor_unitario']:.2f} = R$ {mat['valor_total']:.2f}"
+                                f"R$ {formatar_moeda(mat['valor_unitario'])} = R$ {formatar_moeda(mat['valor_total'])}"
                             )
                         with col_m2:
                             if st.button("Remover", key=f"rem_mat_{idx_grupo}_{idx_mat}"):
@@ -260,7 +260,7 @@ def render(tipo_operacao_fixo):
                         col_mat, col_btn_mat = st.columns([5, 1])
                         with col_mat:
                             material_opcoes = {
-                                f"{m['nome']} (R$ {m['valor']:.2f}/{TIPO_LABELS_MATERIAL[m['tipo_medida']]})": m
+                                f"{m['nome']} (R$ {formatar_moeda(float(m['valor']))}/{TIPO_LABELS_MATERIAL[m['tipo_medida']]})": m
                                 for m in materiais_cadastrados
                             }
                             material_escolhido = st.selectbox(
@@ -293,11 +293,11 @@ def render(tipo_operacao_fixo):
                         if st.button("➕ Cadastrar material agora", key=f"btn_novo_material_vazio_{idx_grupo}"):
                             dialog_novo_material()
 
-                st.markdown(f"**Subtotal do serviço: R$ {subtotal_grupo:.2f}**")
+                st.markdown(f"**Subtotal do serviço: R$ {formatar_moeda(subtotal_grupo)}**")
 
             total_geral += subtotal_grupo
 
-        st.markdown(f"### Total geral: R$ {total_geral:.2f}")
+        st.markdown(f"### Total geral: R$ {formatar_moeda(total_geral)}")
 
     observacoes = st.text_area("Observações (opcional)", value=(edicao.get("observacoes") or "") if edicao else "")
 

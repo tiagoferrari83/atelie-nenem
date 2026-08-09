@@ -1,5 +1,6 @@
 import streamlit as st
 from database import fetch_all, execute
+from constants import formatar_moeda
 
 st.title("✂️ Serviços")
 st.caption("Cadastre os serviços oferecidos, cobrados por unidade, tempo (hora) ou metro.")
@@ -79,7 +80,7 @@ if not servicos:
     st.info("Nenhum serviço encontrado." if busca else "Nenhum serviço cadastrado ainda.")
 else:
     for s in servicos:
-        with st.expander(f"{s['nome']} — R$ {s['valor']:.2f} ({TIPO_LABELS[s['tipo_cobranca']]})"):
+        with st.expander(f"{s['nome']} — R$ {formatar_moeda(float(s['valor']))} ({TIPO_LABELS[s['tipo_cobranca']]})"):
             data_edicao = s.get("atualizado_em") or s["criado_em"]
             st.caption(
                 f"Cadastrado em {s['criado_em'].strftime('%d/%m/%Y %H:%M')} — "

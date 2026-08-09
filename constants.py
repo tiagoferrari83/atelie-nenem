@@ -52,3 +52,10 @@ STATUS_ORCAMENTO_CORES = {
 
 TIPO_LABELS_SERVICO = {"unidade": "un.", "tempo": "h", "metro": "m"}
 TIPO_LABELS_MATERIAL = {"unidade": "un.", "metro": "m", "peso": "kg"}
+
+
+def formatar_moeda(valor):
+    """Formata um número no padrão brasileiro: ponto para milhar, vírgula para centavos.
+    Ex: 1234.56 -> '1.234,56'. Usado em toda a interface e no PDF, para nunca
+    aparecer com ponto decimal (padrão americano) nem em cifras (R$) nem em preços."""
+    return f"{valor:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")

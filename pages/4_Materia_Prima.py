@@ -1,5 +1,6 @@
 import streamlit as st
 from database import fetch_all, execute
+from constants import formatar_moeda
 
 st.title("🧵 Matéria-Prima")
 st.caption("Cadastre tecidos, aviamentos e outros materiais, medidos por unidade, metro ou peso.")
@@ -79,7 +80,7 @@ if not materiais:
     st.info("Nenhum material encontrado." if busca else "Nenhum material cadastrado ainda.")
 else:
     for m in materiais:
-        with st.expander(f"{m['nome']} — R$ {m['valor']:.2f} ({TIPO_LABELS[m['tipo_medida']]})"):
+        with st.expander(f"{m['nome']} — R$ {formatar_moeda(float(m['valor']))} ({TIPO_LABELS[m['tipo_medida']]})"):
             data_edicao = m.get("atualizado_em") or m["criado_em"]
             st.caption(
                 f"Cadastrado em {m['criado_em'].strftime('%d/%m/%Y %H:%M')} — "

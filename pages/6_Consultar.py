@@ -6,6 +6,7 @@ from constants import (
     TIPO_PEDIDO_LABELS,
     STATUS_LABELS, STATUS_ORDEM, STATUS_CORES,
     STATUS_ORCAMENTO_LABELS, STATUS_ORCAMENTO_ORDEM, STATUS_ORCAMENTO_CORES,
+    formatar_moeda,
 )
 
 
@@ -82,19 +83,19 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
             subtotal_grupo = s["valor_total"] + sum(m["valor_total"] for m in grupo["materiais"])
             total += subtotal_grupo
 
-            st.write(
+            st.markdown(
                 f"**{s['descricao']}** — {s['quantidade']:.2f} x "
-                f"R$ {s['valor_unitario']:.2f} = R$ {s['valor_total']:.2f}"
+                f"R$ {formatar_moeda(s['valor_unitario'])} = R$ {formatar_moeda(s['valor_total'])}"
             )
             for m in grupo["materiais"]:
-                st.write(
+                st.markdown(
                     f"　↳ {m['descricao']}: {m['quantidade']:.2f} x "
-                    f"R$ {m['valor_unitario']:.2f} = R$ {m['valor_total']:.2f}"
+                    f"R$ {formatar_moeda(m['valor_unitario'])} = R$ {formatar_moeda(m['valor_total'])}"
                 )
             if grupo["materiais"]:
-                st.caption(f"Subtotal do serviço: R$ {subtotal_grupo:.2f}")
+                st.caption(f"Subtotal do serviço: R$ {formatar_moeda(subtotal_grupo)}")
 
-        st.write(f"**Total: R$ {total:.2f}**")
+        st.markdown(f"**Total: R$ {formatar_moeda(total)}**")
 
         fotos = query(
             "SELECT id, url, storage_path FROM orcamento_fotos WHERE orcamento_id = %s ORDER BY id",

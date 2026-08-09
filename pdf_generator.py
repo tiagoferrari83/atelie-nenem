@@ -7,11 +7,7 @@ from fpdf import FPDF
 from datetime import datetime
 import tempfile
 import os
-
-
-def formatar_moeda(valor):
-    """Formata um número no padrão brasileiro: ponto para milhar, vírgula para centavos."""
-    return f"{valor:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+from constants import formatar_moeda
 
 
 class DocumentoPDF(FPDF):
