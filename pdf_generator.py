@@ -9,6 +9,11 @@ import tempfile
 import os
 
 
+def formatar_moeda(valor):
+    """Formata um número no padrão brasileiro: ponto para milhar, vírgula para centavos."""
+    return f"{valor:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
 class DocumentoPDF(FPDF):
     def __init__(self, titulo):
         super().__init__()
@@ -114,8 +119,8 @@ def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_labe
         pdf.set_font("Helvetica", "B", 9)
         pdf.cell(col_widths[0], 7, str(grupo["descricao"])[:50], border=1)
         pdf.cell(col_widths[1], 7, f"{grupo['quantidade']:.2f}", border=1, align="C")
-        pdf.cell(col_widths[2], 7, f"{grupo['valor_unitario']:.2f}", border=1, align="C")
-        pdf.cell(col_widths[3], 7, f"{grupo['valor_total']:.2f}", border=1, align="C")
+        pdf.cell(col_widths[2], 7, formatar_moeda(grupo['valor_unitario']), border=1, align="C")
+        pdf.cell(col_widths[3], 7, formatar_moeda(grupo['valor_total']), border=1, align="C")
         pdf.ln()
 
         subtotal_grupo = grupo["valor_total"]
@@ -125,8 +130,8 @@ def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_labe
         for mat in grupo.get("materiais", []):
             pdf.cell(col_widths[0], 6, f"   > {str(mat['descricao'])[:45]}", border=1)
             pdf.cell(col_widths[1], 6, f"{mat['quantidade']:.2f}", border=1, align="C")
-            pdf.cell(col_widths[2], 6, f"{mat['valor_unitario']:.2f}", border=1, align="C")
-            pdf.cell(col_widths[3], 6, f"{mat['valor_total']:.2f}", border=1, align="C")
+            pdf.cell(col_widths[2], 6, formatar_moeda(mat['valor_unitario']), border=1, align="C")
+            pdf.cell(col_widths[3], 6, formatar_moeda(mat['valor_total']), border=1, align="C")
             pdf.ln()
             subtotal_grupo += mat["valor_total"]
 
@@ -134,7 +139,7 @@ def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_labe
         if grupo.get("materiais"):
             pdf.set_font("Helvetica", "I", 8)
             pdf.cell(sum(col_widths[:3]), 6, "Subtotal do serviço", border=1, align="R")
-            pdf.cell(col_widths[3], 6, f"{subtotal_grupo:.2f}", border=1, align="C")
+            pdf.cell(col_widths[3], 6, formatar_moeda(subtotal_grupo), border=1, align="C")
             pdf.ln()
 
         total_geral += subtotal_grupo
@@ -142,7 +147,7 @@ def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_labe
     pdf.ln(2)
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(sum(col_widths[:3]), 8, "TOTAL GERAL", border=1, align="R")
-    pdf.cell(col_widths[3], 8, f"R$ {total_geral:.2f}", border=1, align="C")
+    pdf.cell(col_widths[3], 8, f"R$ {formatar_moeda(total_geral)}", border=1, align="C")
     pdf.ln(12)
 
     # --- Observações ---
