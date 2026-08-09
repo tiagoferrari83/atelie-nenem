@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from database import fetch_all_cached, query, execute
 from pdf_generator import gerar_pdf
 from storage import upload_foto, excluir_foto
-from constants import TIPO_PEDIDO_LABELS, TIPO_LABELS_SERVICO, TIPO_LABELS_MATERIAL, formatar_moeda
+from constants import TIPO_PEDIDO_LABELS, TIPO_LABELS_SERVICO, TIPO_LABELS_MATERIAL, formatar_moeda, formatar_reais
 
 
 def render(tipo_operacao_fixo):
@@ -232,7 +232,7 @@ def render(tipo_operacao_fixo):
                 with col_a:
                     st.markdown(
                         f"**{servico_item['descricao']}** — {servico_item['quantidade']:.2f} x "
-                        f"R$ {formatar_moeda(servico_item['valor_unitario'])} = R$ {formatar_moeda(servico_item['valor_total'])}"
+                        f"{formatar_reais(servico_item['valor_unitario'])} = {formatar_reais(servico_item['valor_total'])}"
                     )
                 with col_b:
                     if st.button("Remover serviço", key=f"rem_servico_{idx_grupo}"):
@@ -247,7 +247,7 @@ def render(tipo_operacao_fixo):
                         with col_m1:
                             st.write(
                                 f"　↳ {mat['descricao']} — {mat['quantidade']:.2f} x "
-                                f"R$ {formatar_moeda(mat['valor_unitario'])} = R$ {formatar_moeda(mat['valor_total'])}"
+                                f"{formatar_reais(mat['valor_unitario'])} = {formatar_reais(mat['valor_total'])}"
                             )
                         with col_m2:
                             if st.button("Remover", key=f"rem_mat_{idx_grupo}_{idx_mat}"):
@@ -293,11 +293,11 @@ def render(tipo_operacao_fixo):
                         if st.button("➕ Cadastrar material agora", key=f"btn_novo_material_vazio_{idx_grupo}"):
                             dialog_novo_material()
 
-                st.markdown(f"**Subtotal do serviço: R$ {formatar_moeda(subtotal_grupo)}**")
+                st.markdown(f"**Subtotal do serviço: {formatar_reais(subtotal_grupo)}**")
 
             total_geral += subtotal_grupo
 
-        st.markdown(f"### Total geral: R$ {formatar_moeda(total_geral)}")
+        st.markdown(f"### Total geral: {formatar_reais(total_geral)}")
 
     observacoes = st.text_area("Observações (opcional)", value=(edicao.get("observacoes") or "") if edicao else "")
 

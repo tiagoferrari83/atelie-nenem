@@ -23,6 +23,7 @@ if reabertas:
         label = f"#{os_['id']} {os_['cliente_nome']} ({TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])}){entrega}"
         if st.button(label, key=f"reaberta_{os_['id']}", use_container_width=True):
             st.session_state["consultar_id_foco"] = os_["id"]
+            st.session_state["consultar_tipo_foco"] = "ordem_servico"
             st.switch_page("pages/6_Consultar.py")
     st.divider()
 
@@ -55,6 +56,7 @@ else:
         )
         if st.button(label, key=f"aberta_{os_['id']}", use_container_width=True):
             st.session_state["consultar_id_foco"] = os_["id"]
+            st.session_state["consultar_tipo_foco"] = "ordem_servico"
             st.switch_page("pages/6_Consultar.py")
 
 st.divider()
@@ -89,6 +91,7 @@ else:
         )
         if st.button(label, key=f"entrega_{os_['id']}", use_container_width=True):
             st.session_state["consultar_id_foco"] = os_["id"]
+            st.session_state["consultar_tipo_foco"] = "ordem_servico"
             st.switch_page("pages/6_Consultar.py")
 
 st.divider()

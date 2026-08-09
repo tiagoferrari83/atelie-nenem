@@ -6,7 +6,7 @@ from constants import (
     TIPO_PEDIDO_LABELS,
     STATUS_LABELS, STATUS_ORDEM, STATUS_CORES,
     STATUS_ORCAMENTO_LABELS, STATUS_ORCAMENTO_ORDEM, STATUS_ORCAMENTO_CORES,
-    formatar_moeda,
+    formatar_moeda, formatar_reais,
 )
 
 
@@ -85,17 +85,17 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
 
             st.markdown(
                 f"**{s['descricao']}** — {s['quantidade']:.2f} x "
-                f"R$ {formatar_moeda(s['valor_unitario'])} = R$ {formatar_moeda(s['valor_total'])}"
+                f"{formatar_reais(s['valor_unitario'])} = {formatar_reais(s['valor_total'])}"
             )
             for m in grupo["materiais"]:
                 st.markdown(
                     f"　↳ {m['descricao']}: {m['quantidade']:.2f} x "
-                    f"R$ {formatar_moeda(m['valor_unitario'])} = R$ {formatar_moeda(m['valor_total'])}"
+                    f"{formatar_reais(m['valor_unitario'])} = {formatar_reais(m['valor_total'])}"
                 )
             if grupo["materiais"]:
-                st.caption(f"Subtotal do serviço: R$ {formatar_moeda(subtotal_grupo)}")
+                st.caption(f"Subtotal do serviço: {formatar_reais(subtotal_grupo)}")
 
-        st.markdown(f"**Total: R$ {formatar_moeda(total)}**")
+        st.markdown(f"**Total: {formatar_reais(total)}**")
 
         fotos = query(
             "SELECT id, url, storage_path FROM orcamento_fotos WHERE orcamento_id = %s ORDER BY id",
@@ -209,7 +209,7 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                 dialog_confirmar_exclusao(doc["id"], descricao_doc)
 
 
-st.title("🔍 Consultar")
+st.title("📋 Consultar")
 st.caption("Consulte os documentos já gerados, edite, atualize o status e baixe o PDF novamente se precisar.")
 
 marcar_orcamentos_vencidos()
@@ -217,8 +217,26 @@ marcar_orcamentos_vencidos()
 clientes = fetch_all("clientes", order_by="nome")
 
 id_foco = st.session_state.pop("consultar_id_foco", None)
+tipo_foco = st.session_state.pop("consultar_tipo_foco", None)
 
-aba_orcamento, aba_os = st.tabs(["📝 Orçamento", "🧾 Ordem de Serviço"])
+# O filtro por id_foco só deve ser aplicado na aba correspondente ao documento
+# clicado (ex: um clique numa OS no Dashboard não deve fazer a aba Orçamento
+# tentar achar esse id, porque o id pertence à tabela de OS - antes disso
+# causava "Nenhum orçamento encontrado" mesmo com a OS existindo, só na aba errada).
+id_foco_orcamento = id_foco if tipo_foco in (None, "orcamento") else None
+id_foco_os = id_foco if tipo_foco in (None, "ordem_servico") else None
+
+# Se o clique veio de uma OS, abre direto na aba correta. O parâmetro "default"
+# do st.tabs (que seria mais direto) só existe em versões recentes do Streamlit -
+# para não depender disso, reordenamos os rótulos: a primeira aba passada é
+# sempre a que abre por padrão (comportamento básico, estável em qualquer versão).
+label_orcamento = "📝 Orçamento"
+label_os = "🧾 Ordem de Serviço"
+
+if tipo_foco == "ordem_servico":
+    aba_os, aba_orcamento = st.tabs([label_os, label_orcamento])
+else:
+    aba_orcamento, aba_os = st.tabs([label_orcamento, label_os])
 
 with aba_orcamento:
     col1, col2 = st.columns(2)
@@ -244,9 +262,9 @@ with aba_orcamento:
     """
     params = []
 
-    if id_foco is not None:
+    if id_foco_orcamento is not None:
         sql += " AND o.id = %s"
-        params.append(id_foco)
+        params.append(id_foco_orcamento)
     else:
         if opcoes_cliente[filtro_cliente_orc] is not None:
             sql += " AND o.cliente_id = %s"
@@ -265,7 +283,7 @@ with aba_orcamento:
     else:
         st.caption(f"{len(orcamentos_doc)} orçamento(s) encontrado(s).")
         for doc in orcamentos_doc:
-            renderizar_documento(doc, clientes, id_foco, "orcamento")
+            renderizar_documento(doc, clientes, id_foco_orcamento, "orcamento")
 
 with aba_os:
     col1, col2 = st.columns(2)
@@ -291,9 +309,9 @@ with aba_os:
     """
     params = []
 
-    if id_foco is not None:
+    if id_foco_os is not None:
         sql += " AND o.id = %s"
-        params.append(id_foco)
+        params.append(id_foco_os)
     else:
         if opcoes_cliente[filtro_cliente_os] is not None:
             sql += " AND o.cliente_id = %s"
@@ -312,4 +330,4 @@ with aba_os:
     else:
         st.caption(f"{len(os_doc)} ordem(ns) de serviço encontrada(s).")
         for doc in os_doc:
-            renderizar_documento(doc, clientes, id_foco, "ordem_servico")
+            renderizar_documento(doc, clientes, id_foco_os, "ordem_servico")

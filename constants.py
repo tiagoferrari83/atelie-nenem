@@ -56,6 +56,18 @@ TIPO_LABELS_MATERIAL = {"unidade": "un.", "metro": "m", "peso": "kg"}
 
 def formatar_moeda(valor):
     """Formata um número no padrão brasileiro: ponto para milhar, vírgula para centavos.
-    Ex: 1234.56 -> '1.234,56'. Usado em toda a interface e no PDF, para nunca
-    aparecer com ponto decimal (padrão americano) nem em cifras (R$) nem em preços."""
+    Ex: 1234.56 -> '1.234,56'. Retorna só o número, sem o prefixo R$."""
     return f"{valor:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def formatar_reais(valor):
+    """
+    Como formatar_moeda, mas já inclui o prefixo 'R$' com o cifrão ESCAPADO
+    (\\$) para uso em st.markdown/st.write/st.caption. Sem o escape, dois
+    "R$" no mesmo texto markdown formam um par de delimitadores de fórmula
+    LaTeX ($...$), fazendo o Streamlit renderizar o trecho entre eles como
+    equação (aparece com fundo escuro e texto verde, ilegível). Usar esta
+    função em qualquer texto exibido na interface; formatar_moeda() sozinha
+    continua correta para o PDF (fpdf não interpreta $ como LaTeX).
+    """
+    return f"R\\$ {formatar_moeda(valor)}"
