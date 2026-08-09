@@ -16,7 +16,20 @@ def _get_cached_connection():
     conn_string = st.secrets["connections"]["supabase"]["url"]
     conn = psycopg2.connect(conn_string, cursor_factory=RealDictCursor)
     conn.autocommit = False
+    _definir_timezone(conn)
     return conn
+
+
+def _definir_timezone(conn):
+    """
+    Define o timezone da sessão como horário de Brasília, para que NOW() e
+    CURRENT_DATE já retornem no horário local em vez de UTC (padrão do
+    Postgres). Isso resolve na origem, sem precisar converter na exibição.
+    """
+    cur = conn.cursor()
+    cur.execute("SET TIME ZONE 'America/Sao_Paulo';")
+    conn.commit()
+    cur.close()
 
 
 def get_connection():
