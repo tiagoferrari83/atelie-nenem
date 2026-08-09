@@ -307,18 +307,20 @@ def render(tipo_operacao_fixo):
 
     # Mostra as fotos já existentes (edição) ou herdadas do orçamento de origem
     # (ao aprovar/criar OS a partir de um orçamento), com opção de remover cada uma
-    if edicao:
+    orcamento_id_para_fotos = edicao["orcamento_id"] if edicao else (origem["orcamento_id"] if origem else None)
+    if orcamento_id_para_fotos:
         fotos_existentes = query(
             "SELECT id, url, storage_path FROM orcamento_fotos WHERE orcamento_id = %s ORDER BY id",
-            (edicao["orcamento_id"],),
+            (orcamento_id_para_fotos,),
         )
         if fotos_existentes:
-            st.write("Fotos já anexadas:")
+            rotulo = "Fotos já anexadas:" if edicao else "Fotos do orçamento original (serão levadas para a OS):"
+            st.write(rotulo)
             cols_fotos = st.columns(min(len(fotos_existentes), 4))
             for i, foto in enumerate(fotos_existentes):
                 with cols_fotos[i % 4]:
                     st.image(foto["url"], use_container_width=True)
-                    if st.button("Remover", key=f"rem_foto_existente_{foto['id']}"):
+                    if edicao and st.button("Remover", key=f"rem_foto_existente_{foto['id']}"):
                         try:
                             excluir_foto(foto["storage_path"])
                         except Exception:
