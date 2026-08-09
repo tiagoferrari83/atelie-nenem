@@ -7,9 +7,9 @@ numa tela só (o que causava confusão e um bug de estado entre eles).
 
 import streamlit as st
 from datetime import date, timedelta
-from database import fetch_all_cached, execute
+from database import fetch_all_cached, query, execute
 from pdf_generator import gerar_pdf
-from storage import upload_foto
+from storage import upload_foto, excluir_foto
 from constants import TIPO_PEDIDO_LABELS, TIPO_LABELS_SERVICO, TIPO_LABELS_MATERIAL
 
 
@@ -20,12 +20,23 @@ def render(tipo_operacao_fixo):
     titulo = "Orçamento" if tipo_operacao_fixo == "orcamento" else "Ordem de Serviço"
 
     # --- Se veio de "criar OS a partir de orçamento" (só relevante quando tipo_operacao_fixo == 'ordem_servico') ---
-    origem = st.session_state.pop("criar_os_de_orcamento", None)
+    # IMPORTANTE: só faz pop() na primeira vez que a página carrega vinda de outra
+    # tela. Depois disso, guarda em chave própria (que sobrevive a reruns) para
+    # não perder a informação quando o usuário interage com qualquer widget do
+    # formulário (isso causa um rerun do script inteiro, e um pop() repetido
+    # aqui apagaria os dados de origem/edição antes do clique em "Salvar").
+    chave_origem_ativa = f"origem_ativa_{tipo_operacao_fixo}"
+    if "criar_os_de_orcamento" in st.session_state:
+        st.session_state[chave_origem_ativa] = st.session_state.pop("criar_os_de_orcamento")
+    origem = st.session_state.get(chave_origem_ativa)
     if origem and tipo_operacao_fixo != "ordem_servico":
         origem = None  # ignora se por algum motivo caiu na tela errada
 
     # --- Se veio de "editar" um documento existente ---
-    edicao = st.session_state.pop("editar_orcamento", None)
+    chave_edicao_ativa = f"edicao_ativa_{tipo_operacao_fixo}"
+    if "editar_orcamento" in st.session_state:
+        st.session_state[chave_edicao_ativa] = st.session_state.pop("editar_orcamento")
+    edicao = st.session_state.get(chave_edicao_ativa)
     if edicao and edicao.get("tipo_operacao") != tipo_operacao_fixo:
         edicao = None  # edição de um orçamento não deve abrir na tela de OS e vice-versa
 
@@ -46,15 +57,20 @@ def render(tipo_operacao_fixo):
     # --- Estado da sessão ---
     # Cada item da lista de "grupos" representa um serviço adicionado, com sua lista
     # de materiais (subitens) dentro. Um serviço sem materiais é um grupo com lista vazia.
-    # IMPORTANTE: quando vem de edição ou de "criar OS a partir de orçamento", SEMPRE
-    # reinicializa com os dados recebidos - não reaproveita o que já estava na sessão,
-    # senão o formulário mistura dados de uma navegação anterior.
+    # IMPORTANTE: só reinicializa a lista de itens na PRIMEIRA vez que a edição/origem
+    # é carregada (identificada pelo orcamento_id) - reruns seguintes (causados por
+    # qualquer interação do usuário, como adicionar/remover um item) NÃO devem
+    # sobrescrever o que o usuário já alterou na tela.
     chave_estado = f"grupos_{tipo_operacao_fixo}"
-    if edicao:
-        st.session_state[chave_estado] = edicao["grupos"]
-    elif origem:
-        st.session_state[chave_estado] = origem["grupos"]
-    elif chave_estado not in st.session_state:
+    chave_carregado_id = f"carregado_orcamento_id_{tipo_operacao_fixo}"
+    id_a_carregar = edicao["orcamento_id"] if edicao else (origem["orcamento_id"] if origem else None)
+
+    if id_a_carregar is not None and st.session_state.get(chave_carregado_id) != id_a_carregar:
+        # Primeira vez vendo esta edição/origem específica - carrega os itens dela
+        grupos_iniciais = edicao["grupos"] if edicao else origem["grupos"]
+        st.session_state[chave_estado] = grupos_iniciais
+        st.session_state[chave_carregado_id] = id_a_carregar
+    elif id_a_carregar is None and chave_estado not in st.session_state:
         st.session_state[chave_estado] = []
 
     tipo_operacao = tipo_operacao_fixo
@@ -289,6 +305,27 @@ def render(tipo_operacao_fixo):
     st.subheader("Fotos de referência (opcional)")
     st.caption("As fotos são armazenadas apenas para consulta - não entram no PDF.")
 
+    # Mostra as fotos já existentes (edição) ou herdadas do orçamento de origem
+    # (ao aprovar/criar OS a partir de um orçamento), com opção de remover cada uma
+    if edicao:
+        fotos_existentes = query(
+            "SELECT id, url, storage_path FROM orcamento_fotos WHERE orcamento_id = %s ORDER BY id",
+            (edicao["orcamento_id"],),
+        )
+        if fotos_existentes:
+            st.write("Fotos já anexadas:")
+            cols_fotos = st.columns(min(len(fotos_existentes), 4))
+            for i, foto in enumerate(fotos_existentes):
+                with cols_fotos[i % 4]:
+                    st.image(foto["url"], use_container_width=True)
+                    if st.button("Remover", key=f"rem_foto_existente_{foto['id']}"):
+                        try:
+                            excluir_foto(foto["storage_path"])
+                        except Exception:
+                            pass
+                        execute("DELETE FROM orcamento_fotos WHERE id = %s", (foto["id"],))
+                        st.rerun()
+
     fotos_upload = st.file_uploader(
         "Anexar fotos", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key="upload_fotos"
     )
@@ -375,7 +412,26 @@ def render(tipo_operacao_fixo):
                     "valor_total": m["valor_total"],
                 })
 
-        # Faz upload das fotos e salva as URLs
+        # Se esta OS está sendo criada a partir de um orçamento (aprovação), copia
+        # as referências das fotos do orçamento original para a nova OS - a foto
+        # física no Storage é reaproveitada (não duplicada), só o registro no
+        # banco (orcamento_fotos) é criado apontando para a mesma URL.
+        # Ressalva: se depois alguém excluir a OS ou o orçamento original, a
+        # exclusão da foto no Storage vai "quebrar" a referência que ficou no
+        # outro documento (o arquivo físico é removido, mas o outro registro
+        # ainda aponta para essa URL) - efeito colateral raro e aceitável aqui.
+        if origem and not edicao:
+            fotos_origem = query(
+                "SELECT url, storage_path FROM orcamento_fotos WHERE orcamento_id = %s",
+                (origem["orcamento_id"],),
+            )
+            for foto in fotos_origem:
+                execute(
+                    "INSERT INTO orcamento_fotos (orcamento_id, url, storage_path) VALUES (%s, %s, %s)",
+                    (orcamento_id, foto["url"], foto["storage_path"]),
+                )
+
+        # Faz upload das fotos novas e salva as URLs
         if fotos_upload:
             for foto in fotos_upload:
                 extensao = foto.name.split(".")[-1].lower()
@@ -414,3 +470,6 @@ def render(tipo_operacao_fixo):
         )
 
         st.session_state[chave_estado] = []
+        st.session_state.pop(chave_edicao_ativa, None)
+        st.session_state.pop(chave_origem_ativa, None)
+        st.session_state.pop(chave_carregado_id, None)
