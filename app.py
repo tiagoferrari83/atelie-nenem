@@ -28,15 +28,15 @@ except Exception as e:
 # e desenhar o nosso próprio abaixo, deixando de fora só os links de
 # pages/51_Orcamento.py e pages/52_Ordem_Servico.py (acessíveis pelos botões
 # em "Novo" e em "Consultar", mas não devem aparecer como opção direta no menu).
-pagina_dashboard = st.Page("pages/0_Dashboard.py", title="Dashboard", icon="🧵", default=True)
-pagina_prestador = st.Page("pages/1_Prestador.py", title="Prestador")
-pagina_clientes = st.Page("pages/2_Clientes.py", title="Clientes")
-pagina_servicos = st.Page("pages/3_Servicos.py", title="Serviços")
-pagina_materia_prima = st.Page("pages/4_Materia_Prima.py", title="Matéria-Prima")
-pagina_novo = st.Page("pages/50_Novo.py", title="Novo")
-pagina_orcamento = st.Page("pages/51_Orcamento.py", title="Orçamento")
-pagina_ordem_servico = st.Page("pages/52_Ordem_Servico.py", title="Ordem de Serviço")
-pagina_consultar = st.Page("pages/6_Consultar.py", title="Consultar")
+pagina_dashboard = st.Page("pages/0_Dashboard.py", title="Dashboard", icon="📆", default=True)
+pagina_prestador = st.Page("pages/1_Prestador.py", title="Prestador", icon="🏢")
+pagina_clientes = st.Page("pages/2_Clientes.py", title="Clientes", icon="👤")
+pagina_servicos = st.Page("pages/3_Servicos.py", title="Serviços", icon="✂️")
+pagina_materia_prima = st.Page("pages/4_Materia_Prima.py", title="Matéria-Prima", icon="🧵")
+pagina_novo = st.Page("pages/50_Novo.py", title="Novo", icon="📄")
+pagina_orcamento = st.Page("pages/51_Orcamento.py", title="Orçamento", icon="🧵")
+pagina_ordem_servico = st.Page("pages/52_Ordem_Servico.py", title="Ordem de Serviço", icon="🧵")
+pagina_consultar = st.Page("pages/6_Consultar.py", title="Consultar", icon="🔍")
 
 pg = st.navigation(
     [
@@ -49,12 +49,12 @@ pg = st.navigation(
 
 # Menu lateral customizado - só os links que devem aparecer
 with st.sidebar:
-    st.page_link(pagina_dashboard, label="Dashboard", icon="🧵")
-    st.page_link(pagina_prestador, label="Prestador")
-    st.page_link(pagina_clientes, label="Clientes")
-    st.page_link(pagina_servicos, label="Serviços")
-    st.page_link(pagina_materia_prima, label="Matéria-Prima")
-    st.page_link(pagina_novo, label="Novo")
-    st.page_link(pagina_consultar, label="Consultar")
+    st.page_link(pagina_dashboard, label="Dashboard", icon="📆")
+    st.page_link(pagina_prestador, label="Prestador", icon="🏢")
+    st.page_link(pagina_clientes, label="Clientes", icon="👤")
+    st.page_link(pagina_servicos, label="Serviços", icon="✂️")
+    st.page_link(pagina_materia_prima, label="Matéria-Prima", icon="🧵")
+    st.page_link(pagina_novo, label="Novo", icon="📄")
+    st.page_link(pagina_consultar, label="Consultar", icon="🔍")
 
 pg.run()

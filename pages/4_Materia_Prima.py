@@ -1,7 +1,7 @@
 import streamlit as st
 from database import fetch_all, execute
 
-st.title("🧶 Matéria-Prima")
+st.title("🧵 Matéria-Prima")
 st.caption("Cadastre tecidos, aviamentos e outros materiais, medidos por unidade, metro ou peso.")
 
 TIPO_LABELS = {
