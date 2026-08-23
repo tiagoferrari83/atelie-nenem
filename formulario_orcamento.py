@@ -10,7 +10,12 @@ from datetime import date, timedelta
 from database import fetch_all_cached, query, execute
 from pdf_generator import gerar_pdf
 from storage import upload_foto, excluir_foto
-from constants import TIPO_PEDIDO_LABELS, TIPO_LABELS_SERVICO, TIPO_LABELS_MATERIAL, formatar_moeda, formatar_reais
+from constants import (
+    TIPO_PEDIDO_LABELS,
+    TIPO_LABELS_SERVICO, TIPO_LABELS_MATERIAL,
+    COMPLEXIDADE_LABELS, COMPLEXIDADE_ACRESCIMO, valor_com_complexidade,
+    formatar_moeda, formatar_reais,
+)
 
 
 def render(tipo_operacao_fixo):
@@ -19,18 +24,13 @@ def render(tipo_operacao_fixo):
     """
     titulo = "Orçamento" if tipo_operacao_fixo == "orcamento" else "Ordem de Serviço"
 
-    # --- Se veio de "criar OS a partir de orçamento" (só relevante quando tipo_operacao_fixo == 'ordem_servico') ---
-    # IMPORTANTE: só faz pop() na primeira vez que a página carrega vinda de outra
-    # tela. Depois disso, guarda em chave própria (que sobrevive a reruns) para
-    # não perder a informação quando o usuário interage com qualquer widget do
-    # formulário (isso causa um rerun do script inteiro, e um pop() repetido
-    # aqui apagaria os dados de origem/edição antes do clique em "Salvar").
+    # --- Se veio de "criar OS a partir de orçamento" ---
     chave_origem_ativa = f"origem_ativa_{tipo_operacao_fixo}"
     if "criar_os_de_orcamento" in st.session_state:
         st.session_state[chave_origem_ativa] = st.session_state.pop("criar_os_de_orcamento")
     origem = st.session_state.get(chave_origem_ativa)
     if origem and tipo_operacao_fixo != "ordem_servico":
-        origem = None  # ignora se por algum motivo caiu na tela errada
+        origem = None
 
     # --- Se veio de "editar" um documento existente ---
     chave_edicao_ativa = f"edicao_ativa_{tipo_operacao_fixo}"
@@ -38,7 +38,7 @@ def render(tipo_operacao_fixo):
         st.session_state[chave_edicao_ativa] = st.session_state.pop("editar_orcamento")
     edicao = st.session_state.get(chave_edicao_ativa)
     if edicao and edicao.get("tipo_operacao") != tipo_operacao_fixo:
-        edicao = None  # edição de um orçamento não deve abrir na tela de OS e vice-versa
+        edicao = None
 
     st.title(f"✏️ Editar {titulo}" if edicao else f"📄 Novo {titulo}")
 
@@ -55,18 +55,11 @@ def render(tipo_operacao_fixo):
         st.stop()
 
     # --- Estado da sessão ---
-    # Cada item da lista de "grupos" representa um serviço adicionado, com sua lista
-    # de materiais (subitens) dentro. Um serviço sem materiais é um grupo com lista vazia.
-    # IMPORTANTE: só reinicializa a lista de itens na PRIMEIRA vez que a edição/origem
-    # é carregada (identificada pelo orcamento_id) - reruns seguintes (causados por
-    # qualquer interação do usuário, como adicionar/remover um item) NÃO devem
-    # sobrescrever o que o usuário já alterou na tela.
     chave_estado = f"grupos_{tipo_operacao_fixo}"
     chave_carregado_id = f"carregado_orcamento_id_{tipo_operacao_fixo}"
     id_a_carregar = edicao["orcamento_id"] if edicao else (origem["orcamento_id"] if origem else None)
 
     if id_a_carregar is not None and st.session_state.get(chave_carregado_id) != id_a_carregar:
-        # Primeira vez vendo esta edição/origem específica - carrega os itens dela
         grupos_iniciais = edicao["grupos"] if edicao else origem["grupos"]
         st.session_state[chave_estado] = grupos_iniciais
         st.session_state[chave_carregado_id] = id_a_carregar
@@ -99,7 +92,7 @@ def render(tipo_operacao_fixo):
     cliente_nome = st.selectbox("Cliente", options=list(cliente_opcoes.keys()), index=idx_default)
     cliente_selecionado = cliente_opcoes[cliente_nome]
 
-    # --- Datas ---
+    # --- Datas (formato BR: dd/mm/aaaa) ---
     col_d1, col_d2 = st.columns(2)
     data_validade = None
     data_entrega = None
@@ -108,14 +101,24 @@ def render(tipo_operacao_fixo):
         with col_d1:
             data_validade = st.date_input(
                 "Validade do orçamento",
-                value=(edicao["data_validade"] if edicao and edicao.get("data_validade") else date.today() + timedelta(days=7)),
+                value=(
+                    edicao["data_validade"]
+                    if edicao and edicao.get("data_validade")
+                    else date.today() + timedelta(days=7)
+                ),
+                format="DD/MM/YYYY",
                 help="Preenchida automaticamente para 7 dias a partir de hoje. Pode ajustar manualmente.",
             )
     else:
         with col_d1:
             data_entrega = st.date_input(
                 "Data de entrega prevista",
-                value=(edicao["data_entrega"] if edicao and edicao.get("data_entrega") else date.today() + timedelta(days=7)),
+                value=(
+                    edicao["data_entrega"]
+                    if edicao and edicao.get("data_entrega")
+                    else date.today() + timedelta(days=7)
+                ),
+                format="DD/MM/YYYY",
             )
 
     st.divider()
@@ -147,7 +150,13 @@ def render(tipo_operacao_fixo):
 
     @st.dialog("Cadastro rápido de Matéria-Prima")
     def dialog_novo_material():
+        from constants import TIPO_MATERIAL_LABELS
         nome = st.text_input("Nome do material")
+        tipo_material = st.selectbox(
+            "Tipo de material",
+            options=list(TIPO_MATERIAL_LABELS.keys()),
+            format_func=lambda x: TIPO_MATERIAL_LABELS[x],
+        )
         tipo_medida = st.selectbox(
             "Tipo de medida",
             options=list(TIPO_LABELS_MATERIAL.keys()),
@@ -159,8 +168,8 @@ def render(tipo_operacao_fixo):
                 st.error("O nome é obrigatório.")
             else:
                 execute(
-                    "INSERT INTO materia_prima (nome, tipo_medida, valor) VALUES (%s, %s, %s)",
-                    (nome, tipo_medida, valor),
+                    "INSERT INTO materia_prima (nome, tipo_material, tipo_medida, valor) VALUES (%s, %s, %s, %s)",
+                    (nome, tipo_material, tipo_medida, valor),
                 )
                 st.cache_data.clear()
                 st.success(f"Material '{nome}' cadastrado!")
@@ -178,12 +187,42 @@ def render(tipo_operacao_fixo):
     with col_srv:
         if servicos:
             servico_opcoes = {
-                f"{s['nome']} (R$ {formatar_moeda(float(s['valor']))}/{TIPO_LABELS_SERVICO[s['tipo_cobranca']]})": s for s in servicos
+                f"{s['nome']} (R$ {formatar_moeda(float(s['valor']))}/{TIPO_LABELS_SERVICO[s['tipo_cobranca']]})": s
+                for s in servicos
             }
             servico_escolhido = st.selectbox("Serviço", options=list(servico_opcoes.keys()), key="sel_servico")
+
+            # Complexidade: selecionada por serviço no momento de adicionar
+            complexidade = st.selectbox(
+                "Complexidade",
+                options=list(COMPLEXIDADE_LABELS.keys()),
+                format_func=lambda x: COMPLEXIDADE_LABELS[x],
+                key="sel_complexidade",
+                help="Aplica acréscimo percentual sobre o valor base do serviço selecionado.",
+            )
+
+            # Preview do valor com acréscimo
+            s_preview = servico_opcoes[servico_escolhido]
+            valor_base_preview = float(s_preview["valor"])
+            valor_final_preview = valor_com_complexidade(valor_base_preview, complexidade)
+            acrescimo_preview = COMPLEXIDADE_ACRESCIMO[complexidade]
+            unidade_preview = TIPO_LABELS_SERVICO[s_preview["tipo_cobranca"]]
+
+            if acrescimo_preview > 0:
+                st.caption(
+                    f"Valor base: R$ {formatar_moeda(valor_base_preview)}/{unidade_preview} → "
+                    f"com acréscimo de {int(acrescimo_preview * 100)}%: "
+                    f"**R$ {formatar_moeda(valor_final_preview)}/{unidade_preview}**"
+                )
+            else:
+                st.caption(
+                    f"Valor: R$ {formatar_moeda(valor_base_preview)}/{unidade_preview} (sem acréscimo)"
+                )
+
             qtd_servico = st.number_input("Quantidade do serviço", min_value=0.0, step=0.5, key="qtd_servico")
         else:
             st.caption("Nenhum serviço cadastrado ainda. Use o botão ao lado para cadastrar um.")
+
     with col_btn_srv:
         st.write("")
         st.write("")
@@ -193,13 +232,24 @@ def render(tipo_operacao_fixo):
     if servicos and st.button("Adicionar serviço"):
         if qtd_servico > 0:
             s = servico_opcoes[servico_escolhido]
+            valor_base = float(s["valor"])
+            valor_unitario_final = valor_com_complexidade(valor_base, complexidade)
+            unidade = TIPO_LABELS_SERVICO[s["tipo_cobranca"]]
+
+            # Descrição inclui a unidade de cobrança e a complexidade (se houver acréscimo)
+            acrescimo = COMPLEXIDADE_ACRESCIMO[complexidade]
+            if acrescimo > 0:
+                descricao = f"{s['nome']} (nível {complexidade}, +{int(acrescimo * 100)}%) [{unidade}]"
+            else:
+                descricao = f"{s['nome']} [{unidade}]"
+
             st.session_state[chave_estado].append({
                 "servico": {
                     "item_id": s["id"],
-                    "descricao": s["nome"],
+                    "descricao": descricao,
                     "quantidade": qtd_servico,
-                    "valor_unitario": float(s["valor"]),
-                    "valor_total": float(s["valor"]) * qtd_servico,
+                    "valor_unitario": valor_unitario_final,
+                    "valor_total": round(valor_unitario_final * qtd_servico, 2),
                 },
                 "materiais": [],
             })
@@ -278,12 +328,14 @@ def render(tipo_operacao_fixo):
                         if st.button("Adicionar material", key=f"add_material_{idx_grupo}"):
                             if qtd_material > 0:
                                 m = material_opcoes[material_escolhido]
+                                unidade_mat = TIPO_LABELS_MATERIAL[m["tipo_medida"]]
                                 grupo["materiais"].append({
                                     "item_id": m["id"],
-                                    "descricao": m["nome"],
+                                    # Descrição inclui a unidade de medida do material
+                                    "descricao": f"{m['nome']} [{unidade_mat}]",
                                     "quantidade": qtd_material,
                                     "valor_unitario": float(m["valor"]),
-                                    "valor_total": float(m["valor"]) * qtd_material,
+                                    "valor_total": round(float(m["valor"]) * qtd_material, 2),
                                 })
                                 st.rerun()
                             else:
@@ -305,8 +357,6 @@ def render(tipo_operacao_fixo):
     st.subheader("Fotos de referência (opcional)")
     st.caption("As fotos são armazenadas apenas para consulta - não entram no PDF.")
 
-    # Mostra as fotos já existentes (edição) ou herdadas do orçamento de origem
-    # (ao aprovar/criar OS a partir de um orçamento), com opção de remover cada uma
     orcamento_id_para_fotos = edicao["orcamento_id"] if edicao else (origem["orcamento_id"] if origem else None)
     if orcamento_id_para_fotos:
         fotos_existentes = query(
@@ -338,7 +388,6 @@ def render(tipo_operacao_fixo):
 
     if st.button(label_botao, type="primary", disabled=not st.session_state[chave_estado]):
         if edicao:
-            # Modo edição: atualiza o cabeçalho existente e substitui os itens antigos pelos novos
             orcamento_id = edicao["orcamento_id"]
             execute(
                 """
@@ -349,17 +398,14 @@ def render(tipo_operacao_fixo):
                 """,
                 (cliente_selecionado["id"], tipo_pedido, observacoes, data_validade, data_entrega, orcamento_id),
             )
-            # Remove os itens antigos (cascade também remove materiais filhos) para substituir pelos atuais
             execute("DELETE FROM orcamento_itens WHERE orcamento_id = %s", (orcamento_id,))
         else:
-            # Modo criação: insere um novo documento.
-            # Status inicial: Orçamento começa "aguardando_aprovacao" (status próprio de
-            # orçamento), Ordem de Serviço começa "nova" (status próprio de OS).
             status_inicial = "aguardando_aprovacao" if tipo_operacao == "orcamento" else "nova"
             resultado = execute(
                 """
                 INSERT INTO orcamentos
-                    (cliente_id, tipo_operacao, tipo_pedido, status, observacoes, data_validade, data_entrega, orcamento_origem_id)
+                    (cliente_id, tipo_operacao, tipo_pedido, status, observacoes,
+                     data_validade, data_entrega, orcamento_origem_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
@@ -370,8 +416,6 @@ def render(tipo_operacao_fixo):
             )
             orcamento_id = resultado["id"]
 
-        # Salva os grupos: cada serviço vira um item, e seus materiais viram itens
-        # filhos, ligados pelo servico_pai_item_id
         itens_para_pdf = []
 
         for grupo in st.session_state[chave_estado]:
@@ -399,7 +443,8 @@ def render(tipo_operacao_fixo):
                 execute(
                     """
                     INSERT INTO orcamento_itens
-                        (orcamento_id, tipo_item, item_id, descricao, quantidade, valor_unitario, valor_total, servico_pai_item_id)
+                        (orcamento_id, tipo_item, item_id, descricao, quantidade,
+                         valor_unitario, valor_total, servico_pai_item_id)
                     VALUES (%s, 'materia_prima', %s, %s, %s, %s, %s, %s)
                     """,
                     (
@@ -414,14 +459,7 @@ def render(tipo_operacao_fixo):
                     "valor_total": m["valor_total"],
                 })
 
-        # Se esta OS está sendo criada a partir de um orçamento (aprovação), copia
-        # as referências das fotos do orçamento original para a nova OS - a foto
-        # física no Storage é reaproveitada (não duplicada), só o registro no
-        # banco (orcamento_fotos) é criado apontando para a mesma URL.
-        # Ressalva: se depois alguém excluir a OS ou o orçamento original, a
-        # exclusão da foto no Storage vai "quebrar" a referência que ficou no
-        # outro documento (o arquivo físico é removido, mas o outro registro
-        # ainda aponta para essa URL) - efeito colateral raro e aceitável aqui.
+        # Copia fotos do orçamento de origem para a nova OS
         if origem and not edicao:
             fotos_origem = query(
                 "SELECT url, storage_path FROM orcamento_fotos WHERE orcamento_id = %s",
@@ -433,7 +471,6 @@ def render(tipo_operacao_fixo):
                     (orcamento_id, foto["url"], foto["storage_path"]),
                 )
 
-        # Faz upload das fotos novas e salva as URLs
         if fotos_upload:
             for foto in fotos_upload:
                 extensao = foto.name.split(".")[-1].lower()
@@ -446,7 +483,6 @@ def render(tipo_operacao_fixo):
                 except Exception as e:
                     st.warning(f"Não foi possível enviar a foto '{foto.name}': {e}")
 
-        # Gera o PDF
         pdf_path = gerar_pdf(
             tipo=tipo_operacao,
             prestador=prestador,
@@ -461,7 +497,10 @@ def render(tipo_operacao_fixo):
         with open(pdf_path, "rb") as f:
             pdf_bytes = f.read()
 
-        nome_arquivo = f"{'orcamento' if tipo_operacao == 'orcamento' else 'ordem_servico'}_{cliente_selecionado['nome'].replace(' ', '_')}.pdf"
+        nome_arquivo = (
+            f"{'orcamento' if tipo_operacao == 'orcamento' else 'ordem_servico'}"
+            f"_{cliente_selecionado['nome'].replace(' ', '_')}.pdf"
+        )
 
         st.success("Alterações salvas e PDF gerado com sucesso!" if edicao else "Documento salvo e PDF gerado com sucesso!")
         st.download_button(
