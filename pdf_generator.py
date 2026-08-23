@@ -27,18 +27,16 @@ class DocumentoPDF(FPDF):
         self.cell(0, 10, f"Página {self.page_no()}", align="C")
 
 
-def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_label=None,
+def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="",
               data_validade=None, data_entrega=None):
     """
     tipo: 'orcamento' ou 'ordem_servico'
     prestador: dict com nome, telefone, email, cnpj, logo (bytes ou None)
     cliente: dict com nome, telefone, email, endereco
     grupos: lista de dicts, cada um um serviço:
-        {descricao, quantidade, valor_unitario, valor_total,
+        {descricao, quantidade, valor_unitario, valor_total, observacao_item,
          materiais: [{descricao, quantidade, valor_unitario, valor_total}, ...]}
-        O subtotal de cada grupo (serviço + seus materiais) é calculado aqui.
-    observacoes: texto livre
-    tipo_pedido_label: rótulo do tipo de pedido (ex: "Personalização")
+    observacoes: texto livre do documento
     data_validade: date - validade do orçamento (só para tipo='orcamento')
     data_entrega: date - entrega prevista (só para tipo='ordem_servico')
     """
@@ -55,7 +53,7 @@ def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_labe
         try:
             pdf.image(logo_path, x=10, y=10, w=25)
         except Exception:
-            pass  # se o formato da imagem falhar, segue sem logo
+            pass
 
     # --- Dados do prestador ---
     pdf.set_font("Helvetica", "B", 11)
@@ -77,8 +75,6 @@ def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_labe
     # --- Dados do documento ---
     pdf.set_font("Helvetica", "", 9)
     pdf.cell(0, 5, f"Data: {datetime.now().strftime('%d/%m/%Y')}", ln=True)
-    if tipo_pedido_label:
-        pdf.cell(0, 5, f"Tipo: {tipo_pedido_label}", ln=True)
     if tipo == "orcamento" and data_validade:
         pdf.cell(0, 5, f"Válido até: {data_validade.strftime('%d/%m/%Y')}", ln=True)
     if tipo == "ordem_servico" and data_entrega:
@@ -115,9 +111,16 @@ def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_labe
         pdf.set_font("Helvetica", "B", 9)
         pdf.cell(col_widths[0], 7, str(grupo["descricao"])[:50], border=1)
         pdf.cell(col_widths[1], 7, f"{grupo['quantidade']:.2f}", border=1, align="C")
-        pdf.cell(col_widths[2], 7, formatar_moeda(grupo['valor_unitario']), border=1, align="C")
-        pdf.cell(col_widths[3], 7, formatar_moeda(grupo['valor_total']), border=1, align="C")
+        pdf.cell(col_widths[2], 7, formatar_moeda(grupo["valor_unitario"]), border=1, align="C")
+        pdf.cell(col_widths[3], 7, formatar_moeda(grupo["valor_total"]), border=1, align="C")
         pdf.ln()
+
+        # Observação do serviço (Bloco C)
+        obs = grupo.get("observacao_item", "")
+        if obs:
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.cell(sum(col_widths), 5, f"  Obs: {obs[:100]}", border=0)
+            pdf.ln()
 
         subtotal_grupo = grupo["valor_total"]
 
@@ -126,12 +129,12 @@ def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_labe
         for mat in grupo.get("materiais", []):
             pdf.cell(col_widths[0], 6, f"   > {str(mat['descricao'])[:45]}", border=1)
             pdf.cell(col_widths[1], 6, f"{mat['quantidade']:.2f}", border=1, align="C")
-            pdf.cell(col_widths[2], 6, formatar_moeda(mat['valor_unitario']), border=1, align="C")
-            pdf.cell(col_widths[3], 6, formatar_moeda(mat['valor_total']), border=1, align="C")
+            pdf.cell(col_widths[2], 6, formatar_moeda(mat["valor_unitario"]), border=1, align="C")
+            pdf.cell(col_widths[3], 6, formatar_moeda(mat["valor_total"]), border=1, align="C")
             pdf.ln()
             subtotal_grupo += mat["valor_total"]
 
-        # Subtotal do grupo (só exibe se houver materiais - serviço sozinho já mostra o total na própria linha)
+        # Subtotal do grupo (só exibe se houver materiais)
         if grupo.get("materiais"):
             pdf.set_font("Helvetica", "I", 8)
             pdf.cell(sum(col_widths[:3]), 6, "Subtotal do serviço", border=1, align="R")
@@ -146,14 +149,14 @@ def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_labe
     pdf.cell(col_widths[3], 8, f"R$ {formatar_moeda(total_geral)}", border=1, align="C")
     pdf.ln(12)
 
-    # --- Observações ---
+    # --- Observações gerais do documento ---
     if observacoes:
         pdf.set_font("Helvetica", "B", 10)
         pdf.cell(0, 6, "Observações", ln=True)
         pdf.set_font("Helvetica", "", 9)
         pdf.multi_cell(0, 5, observacoes)
 
-    # --- Assinaturas (prestador e cliente, com data/hora) ---
+    # --- Assinaturas ---
     pdf.ln(20)
 
     largura_col = 85
@@ -161,7 +164,6 @@ def gerar_pdf(tipo, prestador, cliente, grupos, observacoes="", tipo_pedido_labe
     x_inicial = pdf.get_x()
     y_assinatura = pdf.get_y()
 
-    # Coluna do prestador (esquerda)
     pdf.set_xy(x_inicial, y_assinatura)
     pdf.cell(largura_col, 6, "_" * 35, ln=False, align="C")
     pdf.set_xy(x_inicial + largura_col + espaco, y_assinatura)

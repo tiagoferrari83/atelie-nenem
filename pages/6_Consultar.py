@@ -3,7 +3,6 @@ from database import query, fetch_all, execute, montar_grupos_orcamento, marcar_
 from pdf_generator import gerar_pdf
 from storage import excluir_foto
 from constants import (
-    TIPO_PEDIDO_LABELS,
     STATUS_LABELS, STATUS_ORDEM, STATUS_CORES,
     STATUS_ORCAMENTO_LABELS, STATUS_ORCAMENTO_ORDEM, STATUS_ORCAMENTO_CORES,
     formatar_moeda, formatar_reais,
@@ -40,11 +39,10 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
     status_ordem = STATUS_ORCAMENTO_ORDEM if is_orcamento else STATUS_ORDEM
     status_cores = STATUS_ORCAMENTO_CORES if is_orcamento else STATUS_CORES
 
-    tipo_pedido_label = TIPO_PEDIDO_LABELS.get(doc["tipo_pedido"], doc["tipo_pedido"])
     data_fmt = doc["criado_em"].strftime("%d/%m/%Y %H:%M")
     cor_status = status_cores.get(doc["status"], "")
 
-    titulo_expander = f"{cor_status} #{doc['id']} — {tipo_pedido_label} — {doc['cliente_nome']} — {data_fmt}"
+    titulo_expander = f"{cor_status} #{doc['id']} — {doc['cliente_nome']} — {data_fmt}"
 
     with st.expander(titulo_expander, expanded=(id_foco == doc["id"])):
         col_status, col_datas = st.columns(2)
@@ -68,9 +66,6 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
             if not is_orcamento and doc["data_entrega"]:
                 st.write(f"**Entrega prevista:** {doc['data_entrega'].strftime('%d/%m/%Y')}")
 
-        if doc["orcamento_origem_id"]:
-            st.caption(f"Gerada a partir do Orçamento #{doc['orcamento_origem_id']}")
-
         if doc["observacoes"]:
             st.write(f"**Observações:** {doc['observacoes']}")
 
@@ -87,6 +82,10 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                 f"**{s['descricao']}** — {s['quantidade']:.2f} x "
                 f"{formatar_reais(s['valor_unitario'])} = {formatar_reais(s['valor_total'])}"
             )
+            # Observação do serviço (Bloco C)
+            if s.get("observacao_item"):
+                st.caption(f"　📝 {s['observacao_item']}")
+
             for m in grupo["materiais"]:
                 st.markdown(
                     f"　↳ {m['descricao']}: {m['quantidade']:.2f} x "
@@ -117,7 +116,7 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
 
         st.divider()
 
-        col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
 
         with col_btn1:
             if st.button("✏️ Editar", key=f"editar_{tipo_operacao}_{doc['id']}"):
@@ -126,7 +125,7 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                     "orcamento_id": doc["id"],
                     "tipo_operacao": doc["tipo_operacao"],
                     "cliente_id": cliente_obj["id"] if cliente_obj else None,
-                    "tipo_pedido": doc["tipo_pedido"],
+                    "tipo_pedido": doc.get("tipo_pedido", "confeccao"),
                     "observacoes": doc["observacoes"],
                     "data_validade": doc["data_validade"],
                     "data_entrega": doc["data_entrega"],
@@ -157,6 +156,7 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                             "quantidade": g["servico"]["quantidade"],
                             "valor_unitario": g["servico"]["valor_unitario"],
                             "valor_total": g["servico"]["valor_total"],
+                            "observacao_item": g["servico"].get("observacao_item", ""),
                             "materiais": g["materiais"],
                         }
                         for g in grupos
@@ -168,7 +168,6 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                         cliente=cliente_pdf,
                         grupos=grupos_pdf,
                         observacoes=doc["observacoes"] or "",
-                        tipo_pedido_label=tipo_pedido_label,
                         data_validade=doc["data_validade"],
                         data_entrega=doc["data_entrega"],
                     )
@@ -187,23 +186,6 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                     )
 
         with col_btn3:
-            if is_orcamento:
-                if st.button("✅ Aprovar Orçamento", key=f"aprovar_{doc['id']}"):
-                    # Marca o orçamento como aprovado e leva para criar a OS com os itens já preenchidos
-                    execute("UPDATE orcamentos SET status = 'aprovado' WHERE id = %s", (doc["id"],))
-                    cliente_obj = next((c for c in clientes if c["nome"] == doc["cliente_nome"]), None)
-                    st.session_state["criar_os_de_orcamento"] = {
-                        "orcamento_id": doc["id"],
-                        "cliente_id": cliente_obj["id"] if cliente_obj else None,
-                        "tipo_pedido": doc["tipo_pedido"],
-                        "grupos": [
-                            {"servico": g["servico"], "materiais": g["materiais"]}
-                            for g in grupos
-                        ],
-                    }
-                    st.switch_page("pages/52_Ordem_Servico.py")
-
-        with col_btn4:
             if st.button("🗑️ Excluir", key=f"excluir_{tipo_operacao}_{doc['id']}"):
                 descricao_doc = f"#{doc['id']} — {doc['cliente_nome']}"
                 dialog_confirmar_exclusao(doc["id"], descricao_doc)
@@ -219,17 +201,9 @@ clientes = fetch_all("clientes", order_by="nome")
 id_foco = st.session_state.pop("consultar_id_foco", None)
 tipo_foco = st.session_state.pop("consultar_tipo_foco", None)
 
-# O filtro por id_foco só deve ser aplicado na aba correspondente ao documento
-# clicado (ex: um clique numa OS no Dashboard não deve fazer a aba Orçamento
-# tentar achar esse id, porque o id pertence à tabela de OS - antes disso
-# causava "Nenhum orçamento encontrado" mesmo com a OS existindo, só na aba errada).
 id_foco_orcamento = id_foco if tipo_foco in (None, "orcamento") else None
 id_foco_os = id_foco if tipo_foco in (None, "ordem_servico") else None
 
-# Se o clique veio de uma OS, abre direto na aba correta. O parâmetro "default"
-# do st.tabs (que seria mais direto) só existe em versões recentes do Streamlit -
-# para não depender disso, reordenamos os rótulos: a primeira aba passada é
-# sempre a que abre por padrão (comportamento básico, estável em qualquer versão).
 label_orcamento = "📝 Orçamento"
 label_os = "🧾 Ordem de Serviço"
 

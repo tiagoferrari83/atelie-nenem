@@ -11,7 +11,6 @@ from database import fetch_all_cached, query, execute
 from pdf_generator import gerar_pdf
 from storage import upload_foto, excluir_foto
 from constants import (
-    TIPO_PEDIDO_LABELS,
     TIPO_LABELS_SERVICO, TIPO_LABELS_MATERIAL,
     COMPLEXIDADE_LABELS, COMPLEXIDADE_ACRESCIMO, valor_com_complexidade,
     formatar_moeda, formatar_reais,
@@ -73,17 +72,10 @@ def render(tipo_operacao_fixo):
     elif origem:
         st.info(f"Criando Ordem de Serviço a partir do Orçamento #{origem['orcamento_id']}.")
 
-    tipo_pedido_default = edicao["tipo_pedido"] if edicao else (origem["tipo_pedido"] if origem else "confeccao")
-    tipo_pedido = st.selectbox(
-        "Tipo de pedido",
-        options=list(TIPO_PEDIDO_LABELS.keys()),
-        format_func=lambda x: TIPO_PEDIDO_LABELS[x],
-        index=list(TIPO_PEDIDO_LABELS.keys()).index(tipo_pedido_default),
-    )
-
     # --- Cliente ---
     cliente_opcoes = {c["nome"]: c for c in clientes}
     cliente_id_default = edicao["cliente_id"] if edicao else (origem["cliente_id"] if origem else None)
+    # tipo_pedido removido (Bloco C) — campo não existe mais na interface
     if cliente_id_default:
         cliente_nome_default = next((c["nome"] for c in clientes if c["id"] == cliente_id_default), None)
         idx_default = list(cliente_opcoes.keys()).index(cliente_nome_default) if cliente_nome_default else 0
@@ -289,6 +281,17 @@ def render(tipo_operacao_fixo):
                         st.session_state[chave_estado].pop(idx_grupo)
                         st.rerun()
 
+                # Observação opcional por serviço (Bloco C)
+                obs_atual = servico_item.get("observacao_item", "")
+                obs_nova = st.text_input(
+                    "Observação do serviço (opcional)",
+                    value=obs_atual,
+                    key=f"obs_servico_{idx_grupo}",
+                    placeholder="Ex: reforçar costura lateral, usar linha 40...",
+                )
+                # Persiste no estado sem rerun (atualiza em tempo real a cada digitação)
+                st.session_state[chave_estado][idx_grupo]["servico"]["observacao_item"] = obs_nova
+
                 # Materiais (subitens) deste serviço
                 if grupo["materiais"]:
                     st.caption("Materiais usados:")
@@ -392,11 +395,11 @@ def render(tipo_operacao_fixo):
             execute(
                 """
                 UPDATE orcamentos
-                SET cliente_id = %s, tipo_pedido = %s, observacoes = %s,
+                SET cliente_id = %s, observacoes = %s,
                     data_validade = %s, data_entrega = %s
                 WHERE id = %s
                 """,
-                (cliente_selecionado["id"], tipo_pedido, observacoes, data_validade, data_entrega, orcamento_id),
+                (cliente_selecionado["id"], observacoes, data_validade, data_entrega, orcamento_id),
             )
             execute("DELETE FROM orcamento_itens WHERE orcamento_id = %s", (orcamento_id,))
         else:
@@ -406,11 +409,11 @@ def render(tipo_operacao_fixo):
                 INSERT INTO orcamentos
                     (cliente_id, tipo_operacao, tipo_pedido, status, observacoes,
                      data_validade, data_entrega, orcamento_origem_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, 'confeccao', %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
-                    cliente_selecionado["id"], tipo_operacao, tipo_pedido, status_inicial, observacoes,
+                    cliente_selecionado["id"], tipo_operacao, status_inicial, observacoes,
                     data_validade, data_entrega, origem["orcamento_id"] if origem else None,
                 ),
             )
@@ -420,14 +423,17 @@ def render(tipo_operacao_fixo):
 
         for grupo in st.session_state[chave_estado]:
             s = grupo["servico"]
+            obs_item = s.get("observacao_item") or None
             resultado_item = execute(
                 """
                 INSERT INTO orcamento_itens
-                    (orcamento_id, tipo_item, item_id, descricao, quantidade, valor_unitario, valor_total)
-                VALUES (%s, 'servico', %s, %s, %s, %s, %s)
+                    (orcamento_id, tipo_item, item_id, descricao, quantidade,
+                     valor_unitario, valor_total, observacao_item)
+                VALUES (%s, 'servico', %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (orcamento_id, s["item_id"], s["descricao"], s["quantidade"], s["valor_unitario"], s["valor_total"]),
+                (orcamento_id, s["item_id"], s["descricao"], s["quantidade"],
+                 s["valor_unitario"], s["valor_total"], obs_item),
             )
             servico_item_id = resultado_item["id"]
 
@@ -436,6 +442,7 @@ def render(tipo_operacao_fixo):
                 "quantidade": s["quantidade"],
                 "valor_unitario": s["valor_unitario"],
                 "valor_total": s["valor_total"],
+                "observacao_item": obs_item or "",
                 "materiais": [],
             })
 
@@ -489,7 +496,6 @@ def render(tipo_operacao_fixo):
             cliente=cliente_selecionado,
             grupos=itens_para_pdf,
             observacoes=observacoes,
-            tipo_pedido_label=TIPO_PEDIDO_LABELS[tipo_pedido],
             data_validade=data_validade,
             data_entrega=data_entrega,
         )

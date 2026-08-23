@@ -281,11 +281,12 @@ def init_db():
             quantidade NUMERIC(10, 2) NOT NULL,
             valor_unitario NUMERIC(10, 2) NOT NULL,
             valor_total NUMERIC(10, 2) NOT NULL,
+            observacao_item TEXT,
             servico_pai_item_id INTEGER REFERENCES orcamento_itens(id) ON DELETE CASCADE
         );
     """)
 
-    # Compatibilidade: adiciona a coluna de vínculo material -> serviço em bancos já existentes
+    # Compatibilidade: adiciona colunas em orcamento_itens para bancos já existentes
     cur.execute("""
         DO $$
         BEGIN
@@ -295,6 +296,14 @@ def init_db():
             ) THEN
                 ALTER TABLE orcamento_itens
                     ADD COLUMN servico_pai_item_id INTEGER REFERENCES orcamento_itens(id) ON DELETE CASCADE;
+            END IF;
+
+            -- observacao_item: observação opcional por serviço (Bloco C)
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamento_itens' AND column_name = 'observacao_item'
+            ) THEN
+                ALTER TABLE orcamento_itens ADD COLUMN observacao_item TEXT;
             END IF;
         END $$;
     """)
@@ -415,6 +424,7 @@ def montar_grupos_orcamento(orcamento_id):
                     "quantidade": float(i["quantidade"]),
                     "valor_unitario": float(i["valor_unitario"]),
                     "valor_total": float(i["valor_total"]),
+                    "observacao_item": i.get("observacao_item") or "",
                 },
                 "materiais": [],
             }
