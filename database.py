@@ -81,7 +81,6 @@ def init_db():
             nome TEXT NOT NULL,
             tipo_cobranca TEXT NOT NULL CHECK (tipo_cobranca IN ('unidade', 'tempo', 'metro')),
             valor NUMERIC(10, 2) NOT NULL,
-            complexidade INTEGER NOT NULL DEFAULT 1 CHECK (complexidade IN (1, 2, 3)),
             criado_em TIMESTAMP DEFAULT NOW(),
             atualizado_em TIMESTAMP DEFAULT NOW()
         );
@@ -129,14 +128,6 @@ def init_db():
             ) THEN
                 ALTER TABLE materia_prima ADD COLUMN atualizado_em TIMESTAMP DEFAULT NOW();
                 UPDATE materia_prima SET atualizado_em = criado_em WHERE atualizado_em IS NULL;
-            END IF;
-
-            -- complexidade em servicos (Bloco A)
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'servicos' AND column_name = 'complexidade'
-            ) THEN
-                ALTER TABLE servicos ADD COLUMN complexidade INTEGER NOT NULL DEFAULT 1;
             END IF;
 
             -- tipo_material em materia_prima (Bloco A)

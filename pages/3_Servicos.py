@@ -1,6 +1,6 @@
 import streamlit as st
 from database import fetch_all, execute
-from constants import formatar_moeda, COMPLEXIDADE_LABELS, COMPLEXIDADE_ACRESCIMO, valor_com_complexidade
+from constants import formatar_moeda
 
 st.title("✂️ Serviços")
 st.caption("Cadastre os serviços oferecidos, cobrados por unidade, tempo (hora) ou metro.")
@@ -22,29 +22,8 @@ def dialog_editar_servico(servico):
         index=list(TIPO_LABELS.keys()).index(servico["tipo_cobranca"]),
     )
     valor = st.number_input(
-        "Valor base (R$)",
-        min_value=0.0,
-        step=0.5,
-        format="%.2f",
-        value=float(servico["valor"]),
-        help="Valor sem acréscimo de complexidade. O acréscimo é aplicado na hora de adicionar ao orçamento/OS.",
+        "Valor (R$)", min_value=0.0, step=0.5, format="%.2f", value=float(servico["valor"])
     )
-    complexidade_atual = int(servico.get("complexidade") or 1)
-    complexidade = st.selectbox(
-        "Complexidade",
-        options=list(COMPLEXIDADE_LABELS.keys()),
-        format_func=lambda x: COMPLEXIDADE_LABELS[x],
-        index=complexidade_atual - 1,
-        help="Define o acréscimo percentual aplicado sobre o valor base.",
-    )
-
-    valor_final = valor_com_complexidade(valor, complexidade)
-    acrescimo = COMPLEXIDADE_ACRESCIMO[complexidade]
-    if acrescimo > 0:
-        st.caption(
-            f"Valor com acréscimo de {int(acrescimo * 100)}%: "
-            f"R$ {formatar_moeda(valor_final)}"
-        )
 
     if st.button("Salvar alterações", type="primary"):
         if not nome:
@@ -53,11 +32,10 @@ def dialog_editar_servico(servico):
             execute(
                 """
                 UPDATE servicos
-                SET nome = %s, tipo_cobranca = %s, valor = %s, complexidade = %s,
-                    atualizado_em = NOW()
+                SET nome = %s, tipo_cobranca = %s, valor = %s, atualizado_em = NOW()
                 WHERE id = %s
                 """,
-                (nome, tipo_cobranca, valor, complexidade, servico["id"]),
+                (nome, tipo_cobranca, valor, servico["id"]),
             )
             st.success("Serviço atualizado!")
             st.rerun()
@@ -71,19 +49,7 @@ with st.form("form_servico", clear_on_submit=True):
         options=list(TIPO_LABELS.keys()),
         format_func=lambda x: TIPO_LABELS[x],
     )
-    valor = st.number_input(
-        "Valor base (R$)",
-        min_value=0.0,
-        step=0.5,
-        format="%.2f",
-        help="Valor sem acréscimo de complexidade.",
-    )
-    complexidade = st.selectbox(
-        "Complexidade",
-        options=list(COMPLEXIDADE_LABELS.keys()),
-        format_func=lambda x: COMPLEXIDADE_LABELS[x],
-        help="Define o acréscimo percentual aplicado sobre o valor base.",
-    )
+    valor = st.number_input("Valor (R$)", min_value=0.0, step=0.5, format="%.2f")
 
     submitted = st.form_submit_button("Cadastrar")
 
@@ -93,10 +59,10 @@ with st.form("form_servico", clear_on_submit=True):
         else:
             execute(
                 """
-                INSERT INTO servicos (nome, tipo_cobranca, valor, complexidade)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO servicos (nome, tipo_cobranca, valor)
+                VALUES (%s, %s, %s)
                 """,
-                (nome, tipo_cobranca, valor, complexidade),
+                (nome, tipo_cobranca, valor),
             )
             st.success(f"Serviço '{nome}' cadastrado com sucesso!")
             st.rerun()
@@ -116,27 +82,9 @@ if not servicos:
     st.info("Nenhum serviço encontrado." if busca else "Nenhum serviço cadastrado ainda.")
 else:
     for s in servicos:
-        complexidade = int(s.get("complexidade") or 1)
-        valor_base = float(s["valor"])
-        valor_final = valor_com_complexidade(valor_base, complexidade)
-        acrescimo = COMPLEXIDADE_ACRESCIMO[complexidade]
-
-        label_complexidade = COMPLEXIDADE_LABELS[complexidade]
-        label_tipo = TIPO_LABELS[s["tipo_cobranca"]]
-
-        if acrescimo > 0:
-            titulo = (
-                f"{s['nome']} — "
-                f"R$ {formatar_moeda(valor_base)} base → "
-                f"R$ {formatar_moeda(valor_final)} ({label_complexidade}) / {label_tipo}"
-            )
-        else:
-            titulo = (
-                f"{s['nome']} — "
-                f"R$ {formatar_moeda(valor_base)} ({label_complexidade}) / {label_tipo}"
-            )
-
-        with st.expander(titulo):
+        with st.expander(
+            f"{s['nome']} — R$ {formatar_moeda(float(s['valor']))} ({TIPO_LABELS[s['tipo_cobranca']]})"
+        ):
             data_edicao = s.get("atualizado_em") or s["criado_em"]
             st.caption(
                 f"Cadastrado em {s['criado_em'].strftime('%d/%m/%Y %H:%M')} — "
