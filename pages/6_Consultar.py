@@ -209,7 +209,7 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                 dialog_confirmar_exclusao(doc["id"], descricao_doc)
 
 
-st.title("📋 Consultar")
+st.title("🔍 Consultar")
 st.caption("Consulte os documentos já gerados, edite, atualize o status e baixe o PDF novamente se precisar.")
 
 marcar_orcamentos_vencidos()
