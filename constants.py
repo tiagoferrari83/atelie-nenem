@@ -22,7 +22,6 @@ STATUS_LABELS = {
     "reaberta": "Reaberta",
 }
 
-# Ordem em que os status de OS aparecem em selects
 STATUS_ORDEM = ["nova", "aguardando_aprovacao", "em_atendimento", "entregue", "reaberta"]
 
 STATUS_CORES = {
@@ -33,9 +32,7 @@ STATUS_CORES = {
     "reaberta": "🔴",
 }
 
-# Status de Orçamento (próprios, diferentes dos de OS)
-# "aprovado" pode ser marcado manualmente OU automaticamente pelo botão "Aprovar Orçamento".
-# "vencido" é calculado automaticamente (data_validade < hoje) e nunca sobrescreve "aprovado".
+# Status de Orçamento
 STATUS_ORCAMENTO_LABELS = {
     "aguardando_aprovacao": "Aguardando Aprovação",
     "aprovado": "Aprovado",
@@ -53,6 +50,29 @@ STATUS_ORCAMENTO_CORES = {
 TIPO_LABELS_SERVICO = {"unidade": "un.", "tempo": "h", "metro": "m"}
 TIPO_LABELS_MATERIAL = {"unidade": "un.", "metro": "m", "peso": "kg"}
 
+# Tipo de material (Bloco A) — detectado na hora de montar o orçamento
+TIPO_MATERIAL_LABELS = {
+    "tecido": "Tecido",
+    "aviamento": "Aviamento",
+    "outros": "Outros",
+}
+
+# Complexidade do serviço (Bloco A)
+# Nível 1 = sem acréscimo, 2 = +10%, 3 = +20%
+COMPLEXIDADE_LABELS = {
+    1: "1 — Simples (sem acréscimo)",
+    2: "2 — Médio (+10%)",
+    3: "3 — Complexo (+20%)",
+}
+
+COMPLEXIDADE_ACRESCIMO = {1: 0.0, 2: 0.10, 3: 0.20}
+
+
+def valor_com_complexidade(valor_base: float, complexidade: int) -> float:
+    """Retorna o valor do serviço já aplicado o acréscimo de complexidade."""
+    acrescimo = COMPLEXIDADE_ACRESCIMO.get(complexidade, 0.0)
+    return round(valor_base * (1 + acrescimo), 2)
+
 
 def formatar_moeda(valor):
     """Formata um número no padrão brasileiro: ponto para milhar, vírgula para centavos.
@@ -66,8 +86,8 @@ def formatar_reais(valor):
     (\\$) para uso em st.markdown/st.write/st.caption. Sem o escape, dois
     "R$" no mesmo texto markdown formam um par de delimitadores de fórmula
     LaTeX ($...$), fazendo o Streamlit renderizar o trecho entre eles como
-    equação (aparece com fundo escuro e texto verde, ilegível). Usar esta
-    função em qualquer texto exibido na interface; formatar_moeda() sozinha
-    continua correta para o PDF (fpdf não interpreta $ como LaTeX).
+    equação. Usar esta função em qualquer texto exibido na interface;
+    formatar_moeda() sozinha continua correta para o PDF (fpdf não interpreta
+    $ como LaTeX).
     """
     return f"R\\$ {formatar_moeda(valor)}"

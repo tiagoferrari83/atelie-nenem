@@ -4,3 +4,7 @@ __pycache__/
 .venv/
 venv/
 *.pdf
+Dev/
+Backup/
+.Backup
+.Dev

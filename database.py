@@ -81,6 +81,7 @@ def init_db():
             nome TEXT NOT NULL,
             tipo_cobranca TEXT NOT NULL CHECK (tipo_cobranca IN ('unidade', 'tempo', 'metro')),
             valor NUMERIC(10, 2) NOT NULL,
+            complexidade INTEGER NOT NULL DEFAULT 1 CHECK (complexidade IN (1, 2, 3)),
             criado_em TIMESTAMP DEFAULT NOW(),
             atualizado_em TIMESTAMP DEFAULT NOW()
         );
@@ -92,16 +93,18 @@ def init_db():
             id SERIAL PRIMARY KEY,
             nome TEXT NOT NULL,
             tipo_medida TEXT NOT NULL CHECK (tipo_medida IN ('unidade', 'metro', 'peso')),
+            tipo_material TEXT NOT NULL DEFAULT 'outros' CHECK (tipo_material IN ('tecido', 'aviamento', 'outros')),
             valor NUMERIC(10, 2) NOT NULL,
             criado_em TIMESTAMP DEFAULT NOW(),
             atualizado_em TIMESTAMP DEFAULT NOW()
         );
     """)
 
-    # Compatibilidade: adiciona atualizado_em em bancos criados antes desta versão
+    # Compatibilidade: adiciona colunas novas em bancos já existentes
     cur.execute("""
         DO $$
         BEGIN
+            -- atualizado_em em clientes
             IF NOT EXISTS (
                 SELECT 1 FROM information_schema.columns
                 WHERE table_name = 'clientes' AND column_name = 'atualizado_em'
@@ -110,6 +113,7 @@ def init_db():
                 UPDATE clientes SET atualizado_em = criado_em WHERE atualizado_em IS NULL;
             END IF;
 
+            -- atualizado_em em servicos
             IF NOT EXISTS (
                 SELECT 1 FROM information_schema.columns
                 WHERE table_name = 'servicos' AND column_name = 'atualizado_em'
@@ -118,12 +122,29 @@ def init_db():
                 UPDATE servicos SET atualizado_em = criado_em WHERE atualizado_em IS NULL;
             END IF;
 
+            -- atualizado_em em materia_prima
             IF NOT EXISTS (
                 SELECT 1 FROM information_schema.columns
                 WHERE table_name = 'materia_prima' AND column_name = 'atualizado_em'
             ) THEN
                 ALTER TABLE materia_prima ADD COLUMN atualizado_em TIMESTAMP DEFAULT NOW();
                 UPDATE materia_prima SET atualizado_em = criado_em WHERE atualizado_em IS NULL;
+            END IF;
+
+            -- complexidade em servicos (Bloco A)
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'servicos' AND column_name = 'complexidade'
+            ) THEN
+                ALTER TABLE servicos ADD COLUMN complexidade INTEGER NOT NULL DEFAULT 1;
+            END IF;
+
+            -- tipo_material em materia_prima (Bloco A)
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'materia_prima' AND column_name = 'tipo_material'
+            ) THEN
+                ALTER TABLE materia_prima ADD COLUMN tipo_material TEXT NOT NULL DEFAULT 'outros';
             END IF;
         END $$;
     """)
@@ -190,8 +211,7 @@ def init_db():
         END $$;
     """)
 
-    # Corrige registros antigos com status fora dos valores válidos atuais - cada
-    # tipo_operacao tem seu próprio conjunto de status válidos
+    # Corrige registros antigos com status fora dos valores válidos atuais
     cur.execute("""
         UPDATE orcamentos
         SET status = 'nova'
@@ -208,7 +228,6 @@ def init_db():
     """)
 
     # Marca como "vencido" todo orçamento ainda aguardando aprovação cuja validade já passou
-    # (nunca sobrescreve "aprovado" - uma vez aprovado, o orçamento fica aprovado)
     cur.execute("""
         UPDATE orcamentos
         SET status = 'vencido'
@@ -218,8 +237,7 @@ def init_db():
           AND data_validade < CURRENT_DATE;
     """)
 
-    # Garante que a constraint de status reflete os valores atuais (união dos
-    # status de OS e de Orçamento, já que é a mesma coluna para os dois tipos)
+    # Garante que a constraint de status reflete os valores atuais
     cur.execute("""
         DO $$
         BEGIN
@@ -238,9 +256,7 @@ def init_db():
         END $$;
     """)
 
-    # Corrige a foreign key de orcamento_origem_id para ON DELETE SET NULL, para
-    # que excluir um orçamento que já gerou uma OS não seja bloqueado (a OS
-    # filha continua existindo, só perde a referência ao orçamento de origem)
+    # Corrige a foreign key de orcamento_origem_id para ON DELETE SET NULL
     cur.execute("""
         DO $$
         DECLARE
@@ -292,7 +308,7 @@ def init_db():
         END $$;
     """)
 
-    # Fotos anexadas ao orçamento/OS - guarda só a URL do Supabase Storage, não o binário
+    # Fotos anexadas ao orçamento/OS
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orcamento_fotos (
             id SERIAL PRIMARY KEY,
@@ -329,17 +345,8 @@ def fetch_all(table, order_by="id"):
 @st.cache_data(ttl=30, show_spinner=False)
 def fetch_all_cached(table, order_by="id"):
     """
-    Igual a fetch_all, mas cacheado por 30s. Usar em telas com muitos widgets
-    (selects, number_inputs) onde o Streamlit reexecuta o script inteiro a
-    cada clique/tecla - sem isso, cada interação refaz a mesma query no banco
-    à toa, o que é a maior causa de lentidão em telas como a de Orçamento.
-    Não usar para dados que precisam refletir uma escrita feita no mesmo rerun
-    (ex: logo após um INSERT, quando a tela precisa mostrar o registro novo).
-
-    Retorna list[dict] puro, com qualquer campo memoryview (colunas BYTEA,
-    como o logo do prestador) convertido para bytes - st.cache_data precisa
-    serializar (pickle) o valor para guardar em cache, e memoryview não é
-    serializável dessa forma.
+    Igual a fetch_all, mas cacheado por 30s. Retorna list[dict] puro,
+    com qualquer campo memoryview convertido para bytes.
     """
     rows = fetch_all(table, order_by)
     return [
@@ -349,7 +356,7 @@ def fetch_all_cached(table, order_by="id"):
 
 
 def query(sql, params=None):
-    """Executa um SELECT customizado (ex: com JOIN) e retorna as linhas."""
+    """Executa um SELECT customizado e retorna as linhas."""
     try:
         conn = get_connection()
         cur = conn.cursor()
@@ -436,7 +443,6 @@ def montar_grupos_orcamento(orcamento_id):
             if pai_id in grupos_por_item_id:
                 grupos_por_item_id[pai_id]["materiais"].append(material)
             elif grupos:
-                # Material órfão (de dados antigos, sem vínculo) - agrupa no primeiro serviço
                 grupos[0]["materiais"].append(material)
 
     return grupos
@@ -444,11 +450,8 @@ def montar_grupos_orcamento(orcamento_id):
 
 def marcar_orcamentos_vencidos():
     """
-    Atualiza para 'vencido' todo orçamento que ainda está 'aguardando_aprovacao'
-    e cuja data_validade já passou. Nunca mexe em orçamentos já 'aprovado' -
-    uma vez aprovado, o orçamento permanece aprovado mesmo após a validade.
-    Chamada na tela Consultar (não só no boot do app) para refletir vencimentos
-    que aconteceram durante o dia, sem precisar reiniciar o servidor.
+    Atualiza para 'vencido' todo orçamento ainda aguardando aprovação
+    cuja data_validade já passou.
     """
     execute("""
         UPDATE orcamentos
