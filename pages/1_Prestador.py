@@ -18,7 +18,6 @@ with st.form("form_prestador"):
 
     st.divider()
     st.subheader("Imagens")
-
     logo_file = st.file_uploader("Logo (opcional)", type=["png", "jpg", "jpeg"], key="upload_logo")
     assinatura_file = st.file_uploader(
         "Assinatura (opcional)",
@@ -28,13 +27,28 @@ with st.form("form_prestador"):
              "Recomendado: fundo transparente (PNG) ou branco, proporção paisagem.",
     )
 
+    st.divider()
+    st.subheader("Cláusulas do Orçamento")
+    st.caption(
+        "Texto exibido na última página do PDF de Orçamento, após as fotos. "
+        "Use para condições gerais, prazo de pagamento, política de alterações, etc."
+    )
+    clausulas = st.text_area(
+        "Cláusulas",
+        value=existente["clausulas"] if existente and existente.get("clausulas") else "",
+        height=200,
+        max_chars=3000,
+        placeholder="Ex:\n1. O prazo de entrega começa a contar após a aprovação e pagamento do sinal.\n"
+                    "2. Alterações solicitadas após o início da produção poderão gerar custos adicionais.\n"
+                    "3. ...",
+    )
+
     submitted = st.form_submit_button("Salvar")
 
     if submitted:
         if not nome:
             st.error("O nome é obrigatório.")
         else:
-            # Logo: usa o novo upload, ou mantém o existente, ou None
             if logo_file:
                 logo_bytes = logo_file.read()
             elif existente and existente.get("logo"):
@@ -42,7 +56,6 @@ with st.form("form_prestador"):
             else:
                 logo_bytes = None
 
-            # Assinatura: mesma lógica
             if assinatura_file:
                 assinatura_bytes = assinatura_file.read()
             elif existente and existente.get("assinatura"):
@@ -55,18 +68,19 @@ with st.form("form_prestador"):
                     """
                     UPDATE prestador
                     SET nome = %s, telefone = %s, email = %s, cnpj = %s,
-                        logo = %s, assinatura = %s
+                        logo = %s, assinatura = %s, clausulas = %s
                     WHERE id = %s
                     """,
-                    (nome, telefone, email, cnpj, logo_bytes, assinatura_bytes, existente["id"]),
+                    (nome, telefone, email, cnpj, logo_bytes, assinatura_bytes,
+                     clausulas or None, existente["id"]),
                 )
             else:
                 execute(
                     """
-                    INSERT INTO prestador (nome, telefone, email, cnpj, logo, assinatura)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO prestador (nome, telefone, email, cnpj, logo, assinatura, clausulas)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (nome, telefone, email, cnpj, logo_bytes, assinatura_bytes),
+                    (nome, telefone, email, cnpj, logo_bytes, assinatura_bytes, clausulas or None),
                 )
             st.success("Dados salvos com sucesso!")
             st.rerun()

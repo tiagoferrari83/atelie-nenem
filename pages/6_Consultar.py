@@ -1,6 +1,6 @@
 import streamlit as st
 from database import query, fetch_all, execute, montar_grupos_orcamento, marcar_orcamentos_vencidos
-from pdf_generator import gerar_pdf
+from pdf_generator import gerar_pdf_os, gerar_pdf_orcamento
 from storage import excluir_foto
 from constants import (
     STATUS_LABELS, STATUS_ORDEM, STATUS_CORES,
@@ -150,27 +150,66 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                         "email": doc["cliente_email"],
                         "endereco": doc["cliente_endereco"],
                     }
-                    grupos_pdf = [
-                        {
-                            "descricao": g["servico"]["descricao"],
-                            "quantidade": g["servico"]["quantidade"],
-                            "valor_unitario": g["servico"]["valor_unitario"],
-                            "valor_total": g["servico"]["valor_total"],
-                            "observacao_item": g["servico"].get("observacao_item", ""),
-                            "materiais": g["materiais"],
-                        }
-                        for g in grupos
-                    ]
+                    if is_orcamento:
+                        # Reconstrói seções para o gerador de orçamento
+                        itens_bd = query(
+                            """SELECT oi.*, mp.tipo_material
+                               FROM orcamento_itens oi
+                               LEFT JOIN materia_prima mp
+                                 ON mp.id = oi.item_id AND oi.tipo_item = 'materia_prima'
+                               WHERE oi.orcamento_id = %s
+                                 AND oi.servico_pai_item_id IS NULL
+                               ORDER BY oi.id""",
+                            (doc["id"],),
+                        )
+                        secoes_pdf = {"tecidos": [], "aviamentos": [], "outros": [], "servicos": []}
+                        MAP_TIPO = {"tecido": "tecidos", "aviamento": "aviamentos"}
+                        for i in itens_bd:
+                            entry = {
+                                "descricao": i["descricao"],
+                                "quantidade": float(i["quantidade"]),
+                                "valor_unitario": float(i["valor_unitario"]),
+                                "valor_total": float(i["valor_total"]),
+                                "observacao_item": i.get("observacao_item") or "",
+                            }
+                            if i["tipo_item"] == "servico":
+                                secoes_pdf["servicos"].append(entry)
+                            else:
+                                secoes_pdf[MAP_TIPO.get(i.get("tipo_material"), "outros")].append(entry)
 
-                    pdf_path = gerar_pdf(
-                        tipo=doc["tipo_operacao"],
-                        prestador=prestador_pdf,
-                        cliente=cliente_pdf,
-                        grupos=grupos_pdf,
-                        observacoes=doc["observacoes"] or "",
-                        data_validade=doc["data_validade"],
-                        data_entrega=doc["data_entrega"],
-                    )
+                        fotos_bd = query(
+                            "SELECT url FROM orcamento_fotos WHERE orcamento_id=%s ORDER BY id",
+                            (doc["id"],),
+                        )
+                        fotos_pdf = [{"url": f["url"], "pagina_inteira": False} for f in fotos_bd]
+
+                        pdf_path = gerar_pdf_orcamento(
+                            prestador=prestador_pdf,
+                            cliente=cliente_pdf,
+                            secoes=secoes_pdf,
+                            descricao_livre=doc.get("descricao_livre") or "",
+                            data_validade=doc["data_validade"],
+                            fotos=fotos_pdf,
+                        )
+                    else:
+                        grupos_pdf = [
+                            {
+                                "descricao": g["servico"]["descricao"],
+                                "quantidade": g["servico"]["quantidade"],
+                                "valor_unitario": g["servico"]["valor_unitario"],
+                                "valor_total": g["servico"]["valor_total"],
+                                "observacao_item": g["servico"].get("observacao_item", ""),
+                                "materiais": g["materiais"],
+                            }
+                            for g in grupos
+                        ]
+                        pdf_path = gerar_pdf_os(
+                            prestador=prestador_pdf,
+                            cliente=cliente_pdf,
+                            grupos=grupos_pdf,
+                            observacoes=doc["observacoes"] or "",
+                            data_entrega=doc["data_entrega"],
+                        )
 
                     with open(pdf_path, "rb") as f:
                         pdf_bytes = f.read()
@@ -227,7 +266,8 @@ with aba_orcamento:
 
     sql = """
         SELECT o.id, o.tipo_operacao, o.tipo_pedido, o.status, o.observacoes,
-               o.data_validade, o.data_entrega, o.orcamento_origem_id, o.criado_em,
+               o.data_validade, o.data_entrega, o.orcamento_origem_id,
+               o.descricao_livre, o.criado_em,
                c.nome AS cliente_nome, c.telefone AS cliente_telefone,
                c.email AS cliente_email, c.endereco AS cliente_endereco
         FROM orcamentos o

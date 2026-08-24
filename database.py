@@ -58,6 +58,7 @@ def init_db():
             cnpj TEXT,
             logo BYTEA,
             assinatura BYTEA,
+            clausulas TEXT,
             criado_em TIMESTAMP DEFAULT NOW()
         );
     """)
@@ -144,6 +145,14 @@ def init_db():
                 UPDATE materia_prima SET atualizado_em = criado_em WHERE atualizado_em IS NULL;
             END IF;
 
+            -- clausulas no prestador (Bloco E)
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'prestador' AND column_name = 'clausulas'
+            ) THEN
+                ALTER TABLE prestador ADD COLUMN clausulas TEXT;
+            END IF;
+
             -- tipo_material em materia_prima (Bloco A)
             IF NOT EXISTS (
                 SELECT 1 FROM information_schema.columns
@@ -171,6 +180,7 @@ def init_db():
             data_validade DATE,
             data_entrega DATE,
             orcamento_origem_id INTEGER REFERENCES orcamentos(id) ON DELETE SET NULL,
+            descricao_livre TEXT,
             criado_em TIMESTAMP DEFAULT NOW()
         );
     """)
@@ -212,6 +222,19 @@ def init_db():
                 WHERE table_name = 'orcamentos' AND column_name = 'orcamento_origem_id'
             ) THEN
                 ALTER TABLE orcamentos ADD COLUMN orcamento_origem_id INTEGER REFERENCES orcamentos(id);
+            END IF;
+        END $$;
+    """)
+
+    # Compatibilidade: descricao_livre em orcamentos (Bloco E)
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamentos' AND column_name = 'descricao_livre'
+            ) THEN
+                ALTER TABLE orcamentos ADD COLUMN descricao_livre TEXT;
             END IF;
         END $$;
     """)
