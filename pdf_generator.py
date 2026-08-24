@@ -39,6 +39,10 @@ def _txt(texto):
             except UnicodeEncodeError:
                 resultado.append("?")
     return "".join(resultado)
+
+
+def _tmp(dados_bytes, sufixo=".png"):
+    """Salva bytes em arquivo temporário e retorna o caminho."""
     t = tempfile.NamedTemporaryFile(delete=False, suffix=sufixo)
     t.write(bytes(dados_bytes))
     t.close()
