@@ -14,7 +14,31 @@ from constants import formatar_moeda
 # UTILITÁRIOS
 # ════════════════════════════════════════════════════════════════════
 
-def _tmp(dados_bytes, sufixo=".png"):
+def _txt(texto):
+    """
+    Sanitiza texto para uso com fontes core do fpdf2 (Latin-1 / cp1252).
+    Substitui caracteres fora do range por equivalentes ASCII ou os remove,
+    evitando FPDFUnicodeEncodingException em qualquer entrada do usuário.
+    """
+    if not texto:
+        return ""
+    SUBSTITUICOES = {
+        "\u2192": "->", "\u2190": "<-", "\u2194": "<->",
+        "\u21b3": ">",  "\u2713": "OK", "\u2714": "OK",
+        "\u2718": "X",  "\u2022": "-",  "\u2026": "...",
+        "\u2018": "'",  "\u2019": "'",  "\u201c": '"',  "\u201d": '"',
+        "\u2013": "-",  "\u2014": "--", "\u00b0": "o",
+    }
+    resultado = []
+    for c in str(texto):
+        c2 = SUBSTITUICOES.get(c, c)
+        for ch in c2:
+            try:
+                ch.encode("latin-1")
+                resultado.append(ch)
+            except UnicodeEncodeError:
+                resultado.append("?")
+    return "".join(resultado)
     t = tempfile.NamedTemporaryFile(delete=False, suffix=sufixo)
     t.write(bytes(dados_bytes))
     t.close()
@@ -68,7 +92,7 @@ def _cabecalho_prestador(pdf, prestador, logo_path):
             x_txt = 10
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_xy(x_txt, 15)
-    pdf.cell(0, 6, prestador.get("nome", ""), ln=True)
+    pdf.cell(0, 6, _txt(prestador.get("nome", "")), ln=True)
     pdf.set_font("Helvetica", "", 9)
     pdf.set_x(x_txt)
     contato = " | ".join(filter(None, [
@@ -76,7 +100,7 @@ def _cabecalho_prestador(pdf, prestador, logo_path):
         f"Email: {prestador['email']}"  if prestador.get("email")    else "",
         f"CNPJ: {prestador['cnpj']}"   if prestador.get("cnpj")     else "",
     ]))
-    pdf.cell(0, 6, contato, ln=True)
+    pdf.cell(0, 6, _txt(contato), ln=True)
     pdf.ln(4)
 
 
@@ -110,9 +134,9 @@ def _bloco_cliente_datas(pdf, cliente, label_data, valor_data):
     for i in range(max_linhas):
         y_l = pdf.get_y()
         pdf.set_xy(xe, y_l)
-        pdf.cell(lc, 5, linhas_esq[i] if i < len(linhas_esq) else "", ln=False)
+        pdf.cell(lc, 5, _txt(linhas_esq[i]) if i < len(linhas_esq) else "", ln=False)
         pdf.set_xy(xd, y_l)
-        pdf.cell(lc, 5, linhas_dir[i] if i < len(linhas_dir) else "", ln=True)
+        pdf.cell(lc, 5, _txt(linhas_dir[i]) if i < len(linhas_dir) else "", ln=True)
     pdf.ln(5)
 
 
@@ -143,8 +167,8 @@ def _bloco_assinaturas(pdf, prestador, cliente, assinatura_path):
 
     y2 = pdf.get_y()
     pdf.set_font("Helvetica", "", 9)
-    pdf.set_xy(xe, y2); pdf.cell(la, 5, prestador.get("nome", ""), align="C", ln=False)
-    pdf.set_xy(xd, y2); pdf.cell(la, 5, cliente.get("nome", ""),   align="C", ln=True)
+    pdf.set_xy(xe, y2); pdf.cell(la, 5, _txt(prestador.get("nome", "")), align="C", ln=False)
+    pdf.set_xy(xd, y2); pdf.cell(la, 5, _txt(cliente.get("nome", "")),   align="C", ln=True)
 
     y3 = pdf.get_y() + 2
     pdf.set_xy(xe, y3); pdf.cell(la, 5, "Data/Hora: ____/____/______  ____:____", align="C", ln=False)
@@ -182,7 +206,7 @@ def gerar_pdf_os(prestador, cliente, grupos, observacoes="", data_entrega=None):
     total_geral = 0
     for g in grupos:
         pdf.set_font("Helvetica", "B", 9)
-        pdf.cell(cw[0], 7, str(g["descricao"])[:50], border=1)
+        pdf.cell(cw[0], 7, _txt(str(g["descricao"])[:50]), border=1)
         pdf.cell(cw[1], 7, f"{g['quantidade']:.2f}", border=1, align="C")
         pdf.cell(cw[2], 7, formatar_moeda(g["valor_unitario"]), border=1, align="C")
         pdf.cell(cw[3], 7, formatar_moeda(g["valor_total"]),    border=1, align="C")
@@ -190,13 +214,13 @@ def gerar_pdf_os(prestador, cliente, grupos, observacoes="", data_entrega=None):
 
         if g.get("observacao_item"):
             pdf.set_font("Helvetica", "I", 8)
-            pdf.cell(sum(cw), 5, f"  Obs: {g['observacao_item'][:100]}", border=0)
+            pdf.cell(sum(cw), 5, _txt(f"  Obs: {g['observacao_item'][:100]}"), border=0)
             pdf.ln()
 
         subtotal = g["valor_total"]
         pdf.set_font("Helvetica", "", 8)
         for m in g.get("materiais", []):
-            pdf.cell(cw[0], 6, f"   > {str(m['descricao'])[:45]}", border=1)
+            pdf.cell(cw[0], 6, _txt(f"   > {str(m['descricao'])[:45]}"), border=1)
             pdf.cell(cw[1], 6, f"{m['quantidade']:.2f}", border=1, align="C")
             pdf.cell(cw[2], 6, formatar_moeda(m["valor_unitario"]), border=1, align="C")
             pdf.cell(cw[3], 6, formatar_moeda(m["valor_total"]),    border=1, align="C")
@@ -221,7 +245,7 @@ def gerar_pdf_os(prestador, cliente, grupos, observacoes="", data_entrega=None):
         pdf.set_font("Helvetica", "B", 10)
         pdf.cell(0, 6, "Observações", ln=True)
         pdf.set_font("Helvetica", "", 9)
-        pdf.multi_cell(0, 5, observacoes)
+        pdf.multi_cell(0, 5, _txt(observacoes))
         pdf.ln(4)
 
     _bloco_assinaturas(pdf, prestador, cliente, assinatura_path)
@@ -283,7 +307,7 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
         # Título da seção
         pdf.set_font("Helvetica", "B", 10)
         pdf.set_fill_color(210, 210, 210)
-        pdf.cell(0, 7, f"  {titulo_sec}", border=1, fill=True, ln=True)
+        pdf.cell(0, 7, _txt(f"  {titulo_sec}"), border=1, fill=True, ln=True)
 
         # Cabeçalho da tabela
         pdf.set_font("Helvetica", "B", 8)
@@ -296,7 +320,7 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
         for item in itens:
             # Linha principal do item
             pdf.set_font("Helvetica", "", 9)
-            pdf.cell(cw[0], 6, str(item["descricao"])[:55], border=1)
+            pdf.cell(cw[0], 6, _txt(str(item["descricao"])[:55]), border=1)
             pdf.cell(cw[1], 6, f"{item['quantidade']:.2f}", border=1, align="C")
             pdf.cell(cw[2], 6, formatar_moeda(item["valor_unitario"]), border=1, align="C")
             pdf.cell(cw[3], 6, formatar_moeda(item["valor_total"]),    border=1, align="C")
@@ -305,7 +329,7 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
             # Observação na linha seguinte, em itálico
             if item.get("observacao_item"):
                 pdf.set_font("Helvetica", "I", 8)
-                pdf.cell(sum(cw), 5, f"  ↳ {item['observacao_item'][:110]}", border=0)
+                pdf.cell(sum(cw), 5, _txt(f"  > {item['observacao_item'][:110]}"), border=0)
                 pdf.ln()
 
             total_geral += item["valor_total"]
@@ -323,7 +347,7 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
         pdf.set_font("Helvetica", "B", 10)
         pdf.cell(0, 6, "Descrição", ln=True)
         pdf.set_font("Helvetica", "", 9)
-        pdf.multi_cell(0, 5, descricao_livre)
+        pdf.multi_cell(0, 5, _txt(descricao_livre))
         pdf.ln(4)
 
     # ── Assinaturas (ainda na página 1 / continua na mesma) ──
@@ -364,7 +388,7 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
         pdf.set_font("Helvetica", "B", 11)
         pdf.cell(0, 8, "Cláusulas e Condições", ln=True)
         pdf.set_font("Helvetica", "", 9)
-        pdf.multi_cell(0, 5, clausulas)
+        pdf.multi_cell(0, 5, _txt(clausulas))
 
     out = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
     pdf.output(out)
