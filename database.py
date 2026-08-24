@@ -57,8 +57,22 @@ def init_db():
             email TEXT,
             cnpj TEXT,
             logo BYTEA,
+            assinatura BYTEA,
             criado_em TIMESTAMP DEFAULT NOW()
         );
+    """)
+
+    # Compatibilidade: adiciona coluna assinatura em bancos já existentes (Bloco D)
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'prestador' AND column_name = 'assinatura'
+            ) THEN
+                ALTER TABLE prestador ADD COLUMN assinatura BYTEA;
+            END IF;
+        END $$;
     """)
 
     # Clientes
