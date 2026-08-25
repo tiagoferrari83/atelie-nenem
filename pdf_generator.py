@@ -286,7 +286,6 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
     logo_path = _tmp(prestador["logo"]) if prestador.get("logo") else None
     assinatura_path = _tmp(prestador["assinatura"]) if prestador.get("assinatura") else None
 
-    # ── Página 1: cabeçalho + cliente/datas ──
     _cabecalho_prestador(pdf, prestador, logo_path)
     _bloco_cliente_datas(pdf, cliente,
                          "Válido até" if data_validade else None,
@@ -294,7 +293,9 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
 
     pdf.ln(2)
 
-    # ── Seções de itens ──
+    # ── Tabela única de itens com seções ──
+    # Cabeçalho das colunas aparece UMA VEZ só no topo da tabela
+    # Títulos de seção (Tecidos, Aviamentos…) usam a mesma largura total das colunas
     secoes_config = [
         ("tecidos",    "Tecidos"),
         ("aviamentos", "Aviamentos"),
@@ -303,45 +304,44 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
     ]
 
     cw = [22, 95, 35, 28]   # Qtd | Descrição | Valor unit | Total
+    largura_total = sum(cw)  # 180 mm — mesma largura para títulos e cabeçalho
     total_geral = 0
-    alguma_secao = False
 
-    for chave_sec, titulo_sec in secoes_config:
-        itens = secoes.get(chave_sec, [])
-        if not itens:
-            continue
-        alguma_secao = True
+    # Filtra seções que têm itens
+    secoes_com_itens = [
+        (chave, titulo, secoes.get(chave, []))
+        for chave, titulo in secoes_config
+        if secoes.get(chave)
+    ]
 
-        # Título da seção
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.set_fill_color(210, 210, 210)
-        pdf.cell(0, 7, _txt(f"  {titulo_sec}"), border=1, fill=True, ln=True)
-
-        # Cabeçalho da tabela — Qtd. antes de Descrição
+    if secoes_com_itens:
+        # Cabeçalho único das colunas
         pdf.set_font("Helvetica", "B", 8)
         pdf.set_fill_color(235, 235, 235)
         for w, h in zip(cw, ["Qtd.", "Descrição", "Valor Unit. (R$)", "Total (R$)"]):
             pdf.cell(w, 6, h, border=1, fill=True, align="C")
         pdf.ln()
 
-        pdf.set_font("Helvetica", "", 9)
-        for item in itens:
-            # Observação embutida na mesma célula da descrição: "Nome - obs"
-            desc = _txt(str(item["descricao"]))
-            if item.get("observacao_item"):
-                desc = f"{desc} - {_txt(item['observacao_item'])}"
+        for chave_sec, titulo_sec, itens in secoes_com_itens:
+            # Título da seção com largura igual à soma das colunas
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_fill_color(210, 210, 210)
+            pdf.cell(largura_total, 6, _txt(f"  {titulo_sec}"), border=1, fill=True, ln=True)
 
-            pdf.cell(cw[0], 6, f"{item['quantidade']:.2f}", border=1, align="C")
-            pdf.cell(cw[1], 6, desc[:60], border=1)
-            pdf.cell(cw[2], 6, formatar_moeda(item["valor_unitario"]), border=1, align="C")
-            pdf.cell(cw[3], 6, formatar_moeda(item["valor_total"]),    border=1, align="C")
-            pdf.ln()
+            pdf.set_font("Helvetica", "", 9)
+            for item in itens:
+                desc = _txt(str(item["descricao"]))
+                if item.get("observacao_item"):
+                    desc = f"{desc} - {_txt(item['observacao_item'])}"
 
-            total_geral += item["valor_total"]
+                pdf.cell(cw[0], 6, f"{item['quantidade']:.2f}", border=1, align="C")
+                pdf.cell(cw[1], 6, desc[:60], border=1)
+                pdf.cell(cw[2], 6, formatar_moeda(item["valor_unitario"]), border=1, align="C")
+                pdf.cell(cw[3], 6, formatar_moeda(item["valor_total"]),    border=1, align="C")
+                pdf.ln()
+                total_geral += item["valor_total"]
 
         pdf.ln(2)
-
-    if alguma_secao:
         pdf.set_font("Helvetica", "B", 10)
         pdf.cell(sum(cw[:3]), 8, "TOTAL GERAL", border=1, align="R")
         pdf.cell(cw[3], 8, f"R$ {formatar_moeda(total_geral)}", border=1, align="C")
@@ -355,45 +355,85 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
         pdf.multi_cell(0, 5, _txt(descricao_livre))
         pdf.ln(4)
 
-    # ── Páginas seguintes: fotos ──
+    # ── Fotos ──
+    # Baixa e comprime todas as imagens antes de inserir no PDF
+    imgs_baixadas = []
     if fotos:
-        imgs_baixadas = []
         for cfg in fotos:
-            path_img = _baixar_imagem(cfg["url"])
+            path_img = _baixar_e_comprimir(cfg["url"])
             if path_img:
-                imgs_baixadas.append({"path": path_img, "pagina_inteira": cfg.get("pagina_inteira", False)})
+                imgs_baixadas.append({
+                    "path": path_img,
+                    "pagina_inteira": cfg.get("pagina_inteira", False),
+                })
 
-        # Separa fotos de página inteira das normais (até 4 por página)
-        buf_normais = []
-        for img in imgs_baixadas:
-            if img["pagina_inteira"]:
-                if buf_normais:
-                    _pagina_fotos_grade(pdf, buf_normais)
-                    buf_normais = []
-                _pagina_foto_inteira(pdf, img["path"])
-            else:
-                buf_normais.append(img["path"])
-                if len(buf_normais) == 4:
-                    _pagina_fotos_grade(pdf, buf_normais)
-                    buf_normais = []
+    # ── Cláusulas ──
+    clausulas = _txt(prestador.get("clausulas") or "")
 
+    # Altura estimada do bloco de assinaturas (ln(10) + 3 linhas de ~5mm + margem)
+    ALTURA_ASSINATURA = 42  # mm
+    ALTURA_CLAUSULA_MIN = 20  # mm mínimo para decidir se cabe na mesma página
+    MARGEM_INF = 20  # mesma margem inferior do set_auto_page_break
+
+    def espaco_restante():
+        """Espaço disponível na página atual antes da margem inferior."""
+        return pdf.h - pdf.get_y() - MARGEM_INF
+
+    # Processa fotos: página inteira separada, normais em grade 2×2 com proporção
+    buf_normais = []
+
+    def descarregar_buf():
+        nonlocal buf_normais
         if buf_normais:
-            _pagina_fotos_grade(pdf, buf_normais)
+            _pagina_fotos_grade_prop(pdf, buf_normais)
+            buf_normais = []
 
-        _limpar(*[i["path"] for i in imgs_baixadas])
+    for img in imgs_baixadas:
+        if img["pagina_inteira"]:
+            descarregar_buf()
+            _pagina_foto_inteira_prop(pdf, img["path"])
+        else:
+            buf_normais.append(img["path"])
+            if len(buf_normais) == 4:
+                descarregar_buf()
 
-    # ── Cláusulas e Condições ──
-    clausulas = prestador.get("clausulas") or ""
-    if clausulas:
-        pdf.add_page()
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 8, "Cláusulas e Condições", ln=True)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.multi_cell(0, 5, _txt(clausulas))
-        pdf.ln(4)
+    # Último lote de fotos normais (< 4 fotos)
+    # Verifica se cláusulas + assinaturas cabem na mesma página depois das fotos
+    if buf_normais:
+        n = len(buf_normais)
+        # Altura que as fotos vão ocupar: grade 2×2 com células de 110mm de altura
+        # 1–2 fotos → 1 linha (110mm); 3–4 fotos → 2 linhas (230mm)
+        linhas_grade = 1 if n <= 2 else 2
+        altura_fotos = linhas_grade * 110  # mm por linha na grade
 
-    # ── Assinaturas (após cláusulas) ──
-    _bloco_assinaturas(pdf, prestador, cliente, assinatura_path)
+        # Altura necessária para cláusulas (estimativa: 5mm por linha de ~80 chars)
+        altura_cls = 0
+        if clausulas:
+            n_linhas_cls = sum(
+                max(1, len(linha) // 80 + 1) for linha in clausulas.split("\n")
+            )
+            altura_cls = 8 + n_linhas_cls * 5 + 4  # título + linhas + ln(4)
+
+        altura_necessaria = altura_fotos + altura_cls + ALTURA_ASSINATURA + 10
+
+        # Área útil de uma página (altura - margens - cabeçalho estimado)
+        area_util = pdf.h - MARGEM_INF - 25
+
+        if altura_necessaria <= area_util:
+            # Tudo cabe em uma nova página: fotos + cláusulas + assinaturas juntas
+            pdf.add_page()
+            _inserir_fotos_grade_prop_na_pagina_atual(pdf, buf_normais)
+            buf_normais = []
+            _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente, assinatura_path)
+        else:
+            # Não cabe tudo junto — fotos em página própria, resto depois
+            descarregar_buf()
+            _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente, assinatura_path)
+    else:
+        # Sem fotos pendentes — cláusulas e assinaturas onde estiver
+        _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente, assinatura_path)
+
+    _limpar(*[i["path"] for i in imgs_baixadas])
 
     out = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
     pdf.output(out)
@@ -401,31 +441,117 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
     return out
 
 
-def _pagina_foto_inteira(pdf, img_path):
-    """Adiciona uma página com a foto ocupando toda a área útil."""
-    pdf.add_page()
+# ── Helpers de foto e layout ──────────────────────────────────────────
+
+def _baixar_e_comprimir(url):
+    """
+    Baixa imagem da URL, comprime para JPEG (qualidade 60) usando Pillow se
+    disponível, e retorna o path do arquivo temporário resultante.
+    Sem Pillow, apenas baixa sem comprimir.
+    """
+    path_orig = _baixar_imagem(url)
+    if not path_orig:
+        return None
     try:
-        pdf.image(img_path, x=10, y=25, w=190, h=245)
+        from PIL import Image as PilImage
+        img = PilImage.open(path_orig)
+        # Converte para RGB (JPEG não suporta transparência)
+        if img.mode in ("RGBA", "P", "LA"):
+            img = img.convert("RGB")
+        # Redimensiona se muito grande (max 1200px no maior lado)
+        max_px = 1200
+        if max(img.width, img.height) > max_px:
+            img.thumbnail((max_px, max_px), PilImage.LANCZOS)
+        out = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+        img.save(out.name, "JPEG", quality=60, optimize=True)
+        out.close()
+        _limpar(path_orig)
+        return out.name
+    except Exception:
+        # Pillow não disponível ou falha — usa o arquivo original
+        return path_orig
+
+
+def _dimensoes_proporcional(img_w_px, img_h_px, max_w_mm, max_h_mm):
+    """
+    Calcula (w_mm, h_mm) mantendo a proporção original dentro da caixa max.
+    Usa 96 dpi como referência de conversão px → mm.
+    """
+    if img_w_px <= 0 or img_h_px <= 0:
+        return max_w_mm, max_h_mm
+    px_por_mm = 96 / 25.4
+    img_w_mm = img_w_px / px_por_mm
+    img_h_mm = img_h_px / px_por_mm
+    escala = min(max_w_mm / img_w_mm, max_h_mm / img_h_mm, 1.0)
+    return img_w_mm * escala, img_h_mm * escala
+
+
+def _dimensoes_imagem(path):
+    """Retorna (largura_px, altura_px) da imagem, ou (0,0) se falhar."""
+    try:
+        from PIL import Image as PilImage
+        with PilImage.open(path) as img:
+            return img.width, img.height
+    except Exception:
+        return 0, 0
+
+
+def _pagina_foto_inteira_prop(pdf, img_path):
+    """Página com foto em proporção original, centralizada na área útil."""
+    pdf.add_page()
+    max_w, max_h = 190, 245
+    w_px, h_px = _dimensoes_imagem(img_path)
+    w_mm, h_mm = _dimensoes_proporcional(w_px, h_px, max_w, max_h)
+    x = 10 + (max_w - w_mm) / 2
+    y = 25 + (max_h - h_mm) / 2
+    try:
+        pdf.image(img_path, x=x, y=y, w=w_mm, h=h_mm)
     except Exception:
         pdf.set_font("Helvetica", "I", 9)
         pdf.set_y(120)
         pdf.cell(0, 6, "[Imagem não pôde ser carregada]", align="C", ln=True)
 
 
-def _pagina_fotos_grade(pdf, paths):
-    """Adiciona uma página com até 4 fotos em grade 2x2."""
+def _pagina_fotos_grade_prop(pdf, paths):
+    """Nova página com até 4 fotos em grade 2×2, proporção mantida."""
     pdf.add_page()
-    posicoes = [
+    _inserir_fotos_grade_prop_na_pagina_atual(pdf, paths)
+
+
+def _inserir_fotos_grade_prop_na_pagina_atual(pdf, paths):
+    """
+    Insere até 4 fotos em grade 2×2 NA PÁGINA ATUAL (sem add_page).
+    Cada célula: 90×110 mm. Foto centralizada dentro da célula com proporção.
+    """
+    celulas = [
         (10,  25, 90, 110),
         (110, 25, 90, 110),
         (10, 145, 90, 110),
         (110, 145, 90, 110),
     ]
     for i, path in enumerate(paths[:4]):
-        x, y, w, h = posicoes[i]
+        cx, cy, cw_c, ch_c = celulas[i]
+        w_px, h_px = _dimensoes_imagem(path)
+        w_mm, h_mm = _dimensoes_proporcional(w_px, h_px, cw_c, ch_c)
+        x = cx + (cw_c - w_mm) / 2
+        y = cy + (ch_c - h_mm) / 2
         try:
-            pdf.image(path, x=x, y=y, w=w, h=h)
+            pdf.image(path, x=x, y=y, w=w_mm, h=h_mm)
         except Exception:
-            pdf.set_xy(x, y + h / 2)
+            pdf.set_xy(cx, cy + ch_c / 2)
             pdf.set_font("Helvetica", "I", 8)
-            pdf.cell(w, 6, "[Imagem indisponível]", align="C")
+            pdf.cell(cw_c, 6, "[Imagem indisponível]", align="C")
+
+
+def _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente, assinatura_path):
+    """Insere bloco de cláusulas (se houver) e assinaturas na posição atual."""
+    if clausulas:
+        # Se não couber minimamente na página atual, quebra para nova
+        if pdf.get_y() > pdf.h - 60:
+            pdf.add_page()
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 8, "Cláusulas e Condições", ln=True)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.multi_cell(0, 5, clausulas)
+        pdf.ln(4)
+    _bloco_assinaturas(pdf, prestador, cliente, assinatura_path)
