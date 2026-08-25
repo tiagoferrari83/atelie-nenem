@@ -133,7 +133,7 @@ def _widget_fotos_existentes(orcamento_id_para_fotos, modo_edicao):
     cols = st.columns(min(len(fotos), 4))
     for i, foto in enumerate(fotos):
         with cols[i % 4]:
-            st.image(foto["url"], use_container_width=True)
+            st.image(foto["url"], width="stretch")
             if modo_edicao and st.button("Remover", key=f"rem_foto_exist_{foto['id']}"):
                 try:
                     excluir_foto(foto["storage_path"])
@@ -601,7 +601,7 @@ def _render_orcamento():
         for foto in fotos_existentes:
             col_img, col_chk, col_rem = st.columns([3, 2, 1])
             with col_img:
-                st.image(foto["url"], use_container_width=True)
+                st.image(foto["url"], width="stretch")
             with col_chk:
                 cfg_key = f"foto_pi_{foto['id']}"
                 val_atual = st.session_state[chave_fotos_cfg].get(foto["id"], False)
