@@ -228,7 +228,7 @@ def _render_os():
             vu = valor_com_complexidade(vb, complexidade)
             un = TIPO_LABELS_SERVICO[s["tipo_cobranca"]]
             ac = COMPLEXIDADE_ACRESCIMO[complexidade]
-            desc = f"{s['nome']} (nível {complexidade}, +{int(ac*100)}%)/{un}" if ac > 0 else f"{s['nome']}/{un}"
+            desc = f"{s['nome']}/{un}"
             st.session_state[chave_estado].append({
                 "servico": {
                     "item_id": s["id"], "descricao": desc,
@@ -548,7 +548,7 @@ def _render_orcamento():
             vu = valor_com_complexidade(vb, complexidade)
             un = TIPO_LABELS_SERVICO[s["tipo_cobranca"]]
             ac = COMPLEXIDADE_ACRESCIMO[complexidade]
-            desc = f"{s['nome']} (nível {complexidade}, +{int(ac*100)}%)/{un}" if ac > 0 else f"{s['nome']}/{un}"
+            desc = f"{s['nome']}/{un}"
             st.session_state[chave_servicos].append({
                 "item_id": s["id"], "descricao": desc,
                 "quantidade": qtd_srv, "valor_unitario": vu,
