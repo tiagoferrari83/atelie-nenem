@@ -21,7 +21,7 @@ if reabertas:
     for os_ in reabertas:
         entrega = f" — entrega: {os_['data_entrega'].strftime('%d/%m/%Y')}" if os_["data_entrega"] else ""
         label = f"#{os_['id']} {os_['cliente_nome']} ({TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])}){entrega}"
-        if st.button(label, key=f"reaberta_{os_['id']}", use_container_width=True):
+        if st.button(label, key=f"reaberta_{os_['id']}", width='stretch'):
             st.session_state["consultar_id_foco"] = os_["id"]
             st.session_state["consultar_tipo_foco"] = "ordem_servico"
             st.switch_page("pages/6_Consultar.py")
@@ -54,7 +54,7 @@ else:
             f"{TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])} — "
             f"{STATUS_LABELS.get(os_['status'], os_['status'])} — entrega: {entrega}"
         )
-        if st.button(label, key=f"aberta_{os_['id']}", use_container_width=True):
+        if st.button(label, key=f"aberta_{os_['id']}", width='stretch'):
             st.session_state["consultar_id_foco"] = os_["id"]
             st.session_state["consultar_tipo_foco"] = "ordem_servico"
             st.switch_page("pages/6_Consultar.py")
@@ -89,7 +89,7 @@ else:
             f"{cor} {os_['data_entrega'].strftime('%d/%m/%Y')} — "
             f"#{os_['id']} {os_['cliente_nome']} — {TIPO_PEDIDO_LABELS.get(os_['tipo_pedido'], os_['tipo_pedido'])}{atraso}"
         )
-        if st.button(label, key=f"entrega_{os_['id']}", use_container_width=True):
+        if st.button(label, key=f"entrega_{os_['id']}", width='stretch'):
             st.session_state["consultar_id_foco"] = os_["id"]
             st.session_state["consultar_tipo_foco"] = "ordem_servico"
             st.switch_page("pages/6_Consultar.py")

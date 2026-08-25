@@ -86,12 +86,12 @@ def dialog_excluir_cliente(cliente):
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Sim, excluir tudo" if documentos_vinculados else "Sim, excluir", type="primary", use_container_width=True):
+        if st.button("Sim, excluir tudo" if documentos_vinculados else "Sim, excluir", type="primary", width='stretch'):
             _excluir_cliente_e_documentos(cliente["id"], documentos_vinculados)
             st.success("Excluído com sucesso.")
             st.rerun()
     with col2:
-        if st.button("Cancelar", use_container_width=True):
+        if st.button("Cancelar", width='stretch'):
             st.rerun()
 
 

@@ -14,7 +14,7 @@ def dialog_confirmar_exclusao(doc_id, descricao):
     st.warning(f"Excluir **{descricao}** permanentemente? Essa ação não pode ser desfeita.")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Sim, excluir", type="primary", use_container_width=True):
+        if st.button("Sim, excluir", type="primary", width='stretch'):
             fotos_do_doc = query(
                 "SELECT storage_path FROM orcamento_fotos WHERE orcamento_id = %s",
                 (doc_id,),
@@ -28,7 +28,7 @@ def dialog_confirmar_exclusao(doc_id, descricao):
             st.success("Excluído com sucesso.")
             st.rerun()
     with col2:
-        if st.button("Cancelar", use_container_width=True):
+        if st.button("Cancelar", width='stretch'):
             st.rerun()
 
 
@@ -105,7 +105,7 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
             cols_fotos = st.columns(min(len(fotos), 4))
             for i, foto in enumerate(fotos):
                 with cols_fotos[i % 4]:
-                    st.image(foto["url"], use_container_width=True)
+                    st.image(foto["url"], width='stretch')
                     if st.button("Excluir foto", key=f"del_foto_{tipo_operacao}_{foto['id']}"):
                         try:
                             excluir_foto(foto["storage_path"])
