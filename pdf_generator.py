@@ -522,6 +522,8 @@ def _inserir_fotos_grade_prop_na_pagina_atual(pdf, paths):
     """
     Insere até 4 fotos em grade 2×2 NA PÁGINA ATUAL (sem add_page).
     Cada célula: 90×110 mm. Foto centralizada dentro da célula com proporção.
+    Após inserir, avança o cursor para abaixo da última linha ocupada,
+    garantindo que o conteúdo seguinte não sobreponha as fotos.
     """
     celulas = [
         (10,  25, 90, 110),
@@ -529,18 +531,24 @@ def _inserir_fotos_grade_prop_na_pagina_atual(pdf, paths):
         (10, 145, 90, 110),
         (110, 145, 90, 110),
     ]
-    for i, path in enumerate(paths[:4]):
+    n = len(paths[:4])
+    y_max = 25  # rastreia o ponto mais baixo ocupado pelas fotos
+    for i in range(n):
         cx, cy, cw_c, ch_c = celulas[i]
-        w_px, h_px = _dimensoes_imagem(path)
+        w_px, h_px = _dimensoes_imagem(paths[i])
         w_mm, h_mm = _dimensoes_proporcional(w_px, h_px, cw_c, ch_c)
         x = cx + (cw_c - w_mm) / 2
         y = cy + (ch_c - h_mm) / 2
         try:
-            pdf.image(path, x=x, y=y, w=w_mm, h=h_mm)
+            pdf.image(paths[i], x=x, y=y, w=w_mm, h=h_mm)
         except Exception:
             pdf.set_xy(cx, cy + ch_c / 2)
             pdf.set_font("Helvetica", "I", 8)
             pdf.cell(cw_c, 6, "[Imagem indisponível]", align="C")
+        # Registra o fundo da célula (não da imagem) como limite inferior
+        y_max = max(y_max, cy + ch_c)
+    # Posiciona o cursor logo abaixo das fotos com folga de 6 mm
+    pdf.set_y(y_max + 6)
 
 
 def _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente, assinatura_path):
