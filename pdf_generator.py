@@ -7,7 +7,8 @@ Geração de PDFs:
 from fpdf import FPDF
 from datetime import datetime
 import tempfile, os, urllib.request
-from constants import formatar_moeda
+from constants import formatar_moeda, formatar_quantidade, separar_descricao_unidade
+
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -145,27 +146,22 @@ def _bloco_cliente_datas(pdf, cliente, label_data, valor_data):
     pdf.ln(9)
 
 
-def _bloco_assinaturas(pdf, prestador, cliente, assinatura_path):
-    pdf.ln(10)
+def _bloco_assinaturas(pdf, prestador, cliente):
+    if pdf.get_y() > pdf.h - 45:
+        pdf.add_page()
+    pdf.ln(8)
     la = 85
     esp = 10
     xe, xd = 10, 10 + la + esp
     y0 = pdf.get_y()
 
-    if assinatura_path:
-        try:
-            pdf.image(assinatura_path, x=xe, y=y0, w=la, h=14)
-        except Exception:
-            pdf.set_xy(xe, y0 + 8)
-            pdf.cell(la, 6, "_" * 40, align="C", ln=False)
-    else:
-        pdf.set_xy(xe, y0 + 8)
-        pdf.cell(la, 6, "_" * 40, align="C", ln=False)
+    pdf.set_xy(xe, y0 + 6)
+    pdf.cell(la, 6, "_" * 40, align="C", ln=False)
 
-    pdf.set_xy(xd, y0 + 8)
+    pdf.set_xy(xd, y0 + 6)
     pdf.cell(la, 6, "_" * 40, align="C", ln=True)
 
-    y1 = max(pdf.get_y(), y0 + 14) + 1
+    y1 = y0 + 12
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_xy(xe, y1); pdf.cell(la, 5, "Assinatura do Prestador", align="C", ln=False)
     pdf.set_xy(xd, y1); pdf.cell(la, 5, "Assinatura do Cliente",   align="C", ln=True)
@@ -193,7 +189,6 @@ def gerar_pdf_os(prestador, cliente, grupos, observacoes="", data_entrega=None):
     pdf.add_page()
 
     logo_path = _tmp(prestador["logo"]) if prestador.get("logo") else None
-    assinatura_path = _tmp(prestador["assinatura"]) if prestador.get("assinatura") else None
 
     _cabecalho_prestador(pdf, prestador, logo_path)
     _bloco_cliente_datas(pdf, cliente,
@@ -201,7 +196,7 @@ def gerar_pdf_os(prestador, cliente, grupos, observacoes="", data_entrega=None):
                          data_entrega)
 
     # Tabela de itens — ordem: Qtd. | Descrição | Valor Unit. | Total
-    cw = [22, 88, 35, 35]
+    cw = [24, 86, 35, 35]
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_fill_color(230, 230, 230)
     for w, h in zip(cw, ["Qtd.", "Descrição", "Valor Unit. (R$)", "Total (R$)"]):
@@ -210,14 +205,16 @@ def gerar_pdf_os(prestador, cliente, grupos, observacoes="", data_entrega=None):
 
     total_geral = 0
     for g in grupos:
-        # Monta descrição com observação embutida: "Nome - obs" (na mesma célula)
-        desc = _txt(str(g["descricao"]))
+        desc_limpa, un = separar_descricao_unidade(str(g.get("descricao", "")))
+        desc_final = _txt(desc_limpa)
         if g.get("observacao_item"):
-            desc = f"{desc} - {_txt(g['observacao_item'])}"
+            desc_final = f"{desc_final} - {_txt(g['observacao_item'])}"
+
+        qtd_str = formatar_quantidade(g["quantidade"], un)
 
         pdf.set_font("Helvetica", "B", 9)
-        pdf.cell(cw[0], 7, f"{g['quantidade']:.2f}", border=1, align="C")
-        pdf.cell(cw[1], 7, desc[:60], border=1)
+        pdf.cell(cw[0], 7, _txt(qtd_str), border=1, align="C")
+        pdf.cell(cw[1], 7, desc_final[:60], border=1)
         pdf.cell(cw[2], 7, formatar_moeda(g["valor_unitario"]), border=1, align="C")
         pdf.cell(cw[3], 7, formatar_moeda(g["valor_total"]),    border=1, align="C")
         pdf.ln()
@@ -225,11 +222,14 @@ def gerar_pdf_os(prestador, cliente, grupos, observacoes="", data_entrega=None):
         subtotal = g["valor_total"]
         pdf.set_font("Helvetica", "", 8)
         for m in g.get("materiais", []):
-            desc_m = _txt(str(m["descricao"]))
+            desc_m_limpa, un_m = separar_descricao_unidade(str(m.get("descricao", "")))
+            desc_m_final = _txt(desc_m_limpa)
             if m.get("observacao_item"):
-                desc_m = f"{desc_m} - {_txt(m['observacao_item'])}"
-            pdf.cell(cw[0], 6, f"{m['quantidade']:.2f}", border=1, align="C")
-            pdf.cell(cw[1], 6, _txt(f"  > {desc_m[:50]}"), border=1)
+                desc_m_final = f"{desc_m_final} - {_txt(m['observacao_item'])}"
+            qtd_m_str = formatar_quantidade(m["quantidade"], un_m)
+
+            pdf.cell(cw[0], 6, _txt(qtd_m_str), border=1, align="C")
+            pdf.cell(cw[1], 6, _txt(f"  > {desc_m_final[:50]}"), border=1)
             pdf.cell(cw[2], 6, formatar_moeda(m["valor_unitario"]), border=1, align="C")
             pdf.cell(cw[3], 6, formatar_moeda(m["valor_total"]),    border=1, align="C")
             pdf.ln()
@@ -247,7 +247,7 @@ def gerar_pdf_os(prestador, cliente, grupos, observacoes="", data_entrega=None):
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(sum(cw[:3]), 8, "TOTAL GERAL", border=1, align="R")
     pdf.cell(cw[3], 8, f"R$ {formatar_moeda(total_geral)}", border=1, align="C")
-    pdf.ln(12)
+    pdf.ln(8)
 
     if observacoes:
         pdf.set_font("Helvetica", "B", 10)
@@ -256,12 +256,13 @@ def gerar_pdf_os(prestador, cliente, grupos, observacoes="", data_entrega=None):
         pdf.multi_cell(0, 5, _txt(observacoes))
         pdf.ln(4)
 
-    _bloco_assinaturas(pdf, prestador, cliente, assinatura_path)
+    _bloco_assinaturas(pdf, prestador, cliente)
 
     out = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
     pdf.output(out)
-    _limpar(logo_path, assinatura_path)
+    _limpar(logo_path)
     return out
+
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -284,7 +285,6 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
     pdf.add_page()
 
     logo_path = _tmp(prestador["logo"]) if prestador.get("logo") else None
-    assinatura_path = _tmp(prestador["assinatura"]) if prestador.get("assinatura") else None
 
     _cabecalho_prestador(pdf, prestador, logo_path)
     _bloco_cliente_datas(pdf, cliente,
@@ -303,7 +303,7 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
         ("servicos",   "Serviços"),
     ]
 
-    cw = [22, 95, 35, 28]   # Qtd | Descrição | Valor unit | Total
+    cw = [24, 93, 35, 28]   # Qtd | Descrição | Valor unit | Total
     largura_total = sum(cw)  # 180 mm — mesma largura para títulos e cabeçalho
     total_geral = 0
 
@@ -330,12 +330,15 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
 
             pdf.set_font("Helvetica", "", 9)
             for item in itens:
-                desc = _txt(str(item["descricao"]))
+                desc_limpa, un = separar_descricao_unidade(str(item.get("descricao", "")))
+                desc_final = _txt(desc_limpa)
                 if item.get("observacao_item"):
-                    desc = f"{desc} - {_txt(item['observacao_item'])}"
+                    desc_final = f"{desc_final} - {_txt(item['observacao_item'])}"
 
-                pdf.cell(cw[0], 6, f"{item['quantidade']:.2f}", border=1, align="C")
-                pdf.cell(cw[1], 6, desc[:60], border=1)
+                qtd_str = formatar_quantidade(item["quantidade"], un)
+
+                pdf.cell(cw[0], 6, _txt(qtd_str), border=1, align="C")
+                pdf.cell(cw[1], 6, desc_final[:60], border=1)
                 pdf.cell(cw[2], 6, formatar_moeda(item["valor_unitario"]), border=1, align="C")
                 pdf.cell(cw[3], 6, formatar_moeda(item["valor_total"]),    border=1, align="C")
                 pdf.ln()
@@ -370,14 +373,9 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
     # ── Cláusulas ──
     clausulas = _txt(prestador.get("clausulas") or "")
 
-    # Altura estimada do bloco de assinaturas (ln(10) + 3 linhas de ~5mm + margem)
+    # Altura estimada do bloco de assinaturas
     ALTURA_ASSINATURA = 42  # mm
-    ALTURA_CLAUSULA_MIN = 20  # mm mínimo para decidir se cabe na mesma página
     MARGEM_INF = 20  # mesma margem inferior do set_auto_page_break
-
-    def espaco_restante():
-        """Espaço disponível na página atual antes da margem inferior."""
-        return pdf.h - pdf.get_y() - MARGEM_INF
 
     # Processa fotos: página inteira separada, normais em grade 2×2 com proporção
     buf_normais = []
@@ -398,47 +396,39 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
                 descarregar_buf()
 
     # Último lote de fotos normais (< 4 fotos)
-    # Verifica se cláusulas + assinaturas cabem na mesma página depois das fotos
     if buf_normais:
         n = len(buf_normais)
-        # Altura que as fotos vão ocupar: grade 2×2 com células de 110mm de altura
-        # 1–2 fotos → 1 linha (110mm); 3–4 fotos → 2 linhas (230mm)
         linhas_grade = 1 if n <= 2 else 2
-        altura_fotos = linhas_grade * 110  # mm por linha na grade
+        altura_fotos = linhas_grade * 110
 
-        # Altura necessária para cláusulas (estimativa: 5mm por linha de ~80 chars)
         altura_cls = 0
         if clausulas:
             n_linhas_cls = sum(
                 max(1, len(linha) // 80 + 1) for linha in clausulas.split("\n")
             )
-            altura_cls = 8 + n_linhas_cls * 5 + 4  # título + linhas + ln(4)
+            altura_cls = 8 + n_linhas_cls * 5 + 4
 
         altura_necessaria = altura_fotos + altura_cls + ALTURA_ASSINATURA + 10
-
-        # Área útil de uma página (altura - margens - cabeçalho estimado)
         area_util = pdf.h - MARGEM_INF - 25
 
         if altura_necessaria <= area_util:
-            # Tudo cabe em uma nova página: fotos + cláusulas + assinaturas juntas
             pdf.add_page()
             _inserir_fotos_grade_prop_na_pagina_atual(pdf, buf_normais)
             buf_normais = []
-            _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente, assinatura_path)
+            _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente)
         else:
-            # Não cabe tudo junto — fotos em página própria, resto depois
             descarregar_buf()
-            _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente, assinatura_path)
+            _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente)
     else:
-        # Sem fotos pendentes — cláusulas e assinaturas onde estiver
-        _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente, assinatura_path)
+        _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente)
 
     _limpar(*[i["path"] for i in imgs_baixadas])
 
     out = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
     pdf.output(out)
-    _limpar(logo_path, assinatura_path)
+    _limpar(logo_path)
     return out
+
 
 
 # ── Helpers de foto e layout ──────────────────────────────────────────
@@ -551,7 +541,7 @@ def _inserir_fotos_grade_prop_na_pagina_atual(pdf, paths):
     pdf.set_y(y_max + 6)
 
 
-def _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente, assinatura_path):
+def _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente):
     """Insere bloco de cláusulas (se houver) e assinaturas na posição atual."""
     if clausulas:
         # Se não couber minimamente na página atual, quebra para nova
@@ -562,4 +552,5 @@ def _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente, assinat
         pdf.set_font("Helvetica", "", 9)
         pdf.multi_cell(0, 5, clausulas)
         pdf.ln(4)
-    _bloco_assinaturas(pdf, prestador, cliente, assinatura_path)
+    _bloco_assinaturas(pdf, prestador, cliente)
+

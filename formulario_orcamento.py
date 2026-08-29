@@ -16,8 +16,9 @@ from storage import upload_foto, excluir_foto
 from constants import (
     TIPO_LABELS_SERVICO, TIPO_LABELS_MATERIAL, TIPO_MATERIAL_LABELS,
     COMPLEXIDADE_LABELS, COMPLEXIDADE_ACRESCIMO, valor_com_complexidade,
-    formatar_moeda, formatar_reais,
+    formatar_moeda, formatar_reais, formatar_quantidade, separar_descricao_unidade,
 )
+
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -260,8 +261,10 @@ def _render_os():
             with st.container(border=True):
                 col_a, col_b = st.columns([5, 1])
                 with col_a:
+                    s_desc_limpa, s_un = separar_descricao_unidade(str(s_item.get("descricao", "")))
+                    s_qtd_fmt = formatar_quantidade(s_item["quantidade"], s_un)
                     st.markdown(
-                        f"**{s_item['descricao']}** — {s_item['quantidade']:.2f} x "
+                        f"**{s_desc_limpa}** — {s_qtd_fmt} x "
                         f"{formatar_reais(s_item['valor_unitario'])} = {formatar_reais(s_item['valor_total'])}"
                     )
                 with col_b:
@@ -282,14 +285,17 @@ def _render_os():
                     for idx_m, mat in enumerate(grupo["materiais"]):
                         col_m1, col_m2 = st.columns([5, 1])
                         with col_m1:
+                            m_desc_limpa, m_un = separar_descricao_unidade(str(mat.get("descricao", "")))
+                            m_qtd_fmt = formatar_quantidade(mat["quantidade"], m_un)
                             st.write(
-                                f"　↳ {mat['descricao']} — {mat['quantidade']:.2f} x "
+                                f"　↳ {m_desc_limpa} — {m_qtd_fmt} x "
                                 f"{formatar_reais(mat['valor_unitario'])} = {formatar_reais(mat['valor_total'])}"
                             )
                         with col_m2:
                             if st.button("Remover", key=f"os_rem_mat_{idx_g}_{idx_m}"):
                                 grupo["materiais"].pop(idx_m)
                                 st.rerun()
+
 
                 with st.expander("➕ Adicionar matéria-prima"):
                     if materiais_cadastrados:
@@ -804,13 +810,16 @@ def _listar_itens_simples(chave, prefixo):
     for idx, item in enumerate(itens):
         col_a, col_b = st.columns([5, 1])
         with col_a:
+            desc_limpa, un = separar_descricao_unidade(str(item.get("descricao", "")))
+            qtd_formatada = formatar_quantidade(item["quantidade"], un)
             linha = (
-                f"**{item['descricao']}** — {item['quantidade']:.2f} x "
+                f"**{desc_limpa}** — {qtd_formatada} x "
                 f"{formatar_reais(item['valor_unitario'])} = {formatar_reais(item['valor_total'])}"
             )
             if item.get("observacao_item"):
                 linha += f"  \n　*{item['observacao_item']}*"
             st.markdown(linha)
+
         with col_b:
             if st.button("Remover", key=f"orc_rem_{prefixo}_{idx}"):
                 st.session_state[chave].pop(idx)

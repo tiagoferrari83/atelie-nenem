@@ -5,8 +5,9 @@ from storage import excluir_foto
 from constants import (
     STATUS_LABELS, STATUS_ORDEM, STATUS_CORES,
     STATUS_ORCAMENTO_LABELS, STATUS_ORCAMENTO_ORDEM, STATUS_ORCAMENTO_CORES,
-    formatar_moeda, formatar_reais,
+    formatar_moeda, formatar_reais, formatar_quantidade, separar_descricao_unidade,
 )
+
 
 
 @st.dialog("Confirmar exclusão")
@@ -78,8 +79,10 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
             subtotal_grupo = s["valor_total"] + sum(m["valor_total"] for m in grupo["materiais"])
             total += subtotal_grupo
 
+            s_desc_limpa, s_un = separar_descricao_unidade(str(s.get("descricao", "")))
+            s_qtd_fmt = formatar_quantidade(s["quantidade"], s_un)
             st.markdown(
-                f"**{s['descricao']}** — {s['quantidade']:.2f} x "
+                f"**{s_desc_limpa}** — {s_qtd_fmt} x "
                 f"{formatar_reais(s['valor_unitario'])} = {formatar_reais(s['valor_total'])}"
             )
             # Observação do serviço (Bloco C)
@@ -87,10 +90,13 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                 st.caption(f"　📝 {s['observacao_item']}")
 
             for m in grupo["materiais"]:
+                m_desc_limpa, m_un = separar_descricao_unidade(str(m.get("descricao", "")))
+                m_qtd_fmt = formatar_quantidade(m["quantidade"], m_un)
                 st.markdown(
-                    f"　↳ {m['descricao']}: {m['quantidade']:.2f} x "
+                    f"　↳ {m_desc_limpa}: {m_qtd_fmt} x "
                     f"{formatar_reais(m['valor_unitario'])} = {formatar_reais(m['valor_total'])}"
                 )
+
             if grupo["materiais"]:
                 st.caption(f"Subtotal do serviço: {formatar_reais(subtotal_grupo)}")
 

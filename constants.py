@@ -81,9 +81,9 @@ def formatar_moeda(valor):
 
 
 def formatar_reais(valor):
-    """
+    r"""
     Como formatar_moeda, mas já inclui o prefixo 'R$' com o cifrão ESCAPADO
-    (\\$) para uso em st.markdown/st.write/st.caption. Sem o escape, dois
+    (\$) para uso em st.markdown/st.write/st.caption. Sem o escape, dois
     "R$" no mesmo texto markdown formam um par de delimitadores de fórmula
     LaTeX ($...$), fazendo o Streamlit renderizar o trecho entre eles como
     equação. Usar esta função em qualquer texto exibido na interface;
@@ -91,3 +91,46 @@ def formatar_reais(valor):
     $ como LaTeX).
     """
     return f"R\\$ {formatar_moeda(valor)}"
+
+
+
+def formatar_quantidade(qtd: float, unidade: str = "") -> str:
+    """
+    Formata quantidade no padrão brasileiro:
+    - Sem casas decimais se for inteiro (ex: 1, 2, 10)
+    - Com vírgula para números decimais (ex: 1,5 ou 2,75)
+    - Concatena a unidade de medida com espaço caso informada (ex: '1 un.', '2,5 m')
+    """
+    try:
+        qtd_f = float(qtd)
+    except (ValueError, TypeError):
+        return str(qtd)
+
+    if qtd_f.is_integer():
+        qtd_str = str(int(qtd_f))
+    else:
+        # Formata com até 2 casas decimais e remove zeros à direita supérfluos
+        qtd_str = f"{qtd_f:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+
+    if unidade:
+        return f"{qtd_str} {unidade}".strip()
+    return qtd_str
+
+
+def separar_descricao_unidade(descricao: str):
+    """
+    Se a descrição terminar com '/un.', '/m', '/h', '/kg' ou similar,
+    separa em (nome_limpo, unidade).
+    Ex: 'Bainha/m' -> ('Bainha', 'm')
+        'Botão/un.' -> ('Botão', 'un.')
+        'Zíper' -> ('Zíper', '')
+    """
+    if not descricao:
+        return "", ""
+    unidades_conhecidas = ["un.", "un", "m", "h", "kg"]
+    for un in unidades_conhecidas:
+        sufixo = f"/{un}"
+        if descricao.endswith(sufixo):
+            return descricao[:-len(sufixo)].strip(), un
+    return descricao.strip(), ""
+
