@@ -319,6 +319,10 @@ def init_db():
             valor_unitario NUMERIC(10, 2) NOT NULL,
             valor_total NUMERIC(10, 2) NOT NULL,
             observacao_item TEXT,
+            tipo_desconto TEXT,
+            valor_desconto NUMERIC(10, 2),
+            motivo_desconto TEXT,
+            desconto_calculado NUMERIC(10, 2),
             servico_pai_item_id INTEGER REFERENCES orcamento_itens(id) ON DELETE CASCADE
         );
     """)
@@ -341,6 +345,35 @@ def init_db():
                 WHERE table_name = 'orcamento_itens' AND column_name = 'observacao_item'
             ) THEN
                 ALTER TABLE orcamento_itens ADD COLUMN observacao_item TEXT;
+            END IF;
+
+            -- Descontos em serviços
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamento_itens' AND column_name = 'tipo_desconto'
+            ) THEN
+                ALTER TABLE orcamento_itens ADD COLUMN tipo_desconto TEXT;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamento_itens' AND column_name = 'valor_desconto'
+            ) THEN
+                ALTER TABLE orcamento_itens ADD COLUMN valor_desconto NUMERIC(10, 2);
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamento_itens' AND column_name = 'motivo_desconto'
+            ) THEN
+                ALTER TABLE orcamento_itens ADD COLUMN motivo_desconto TEXT;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamento_itens' AND column_name = 'desconto_calculado'
+            ) THEN
+                ALTER TABLE orcamento_itens ADD COLUMN desconto_calculado NUMERIC(10, 2);
             END IF;
         END $$;
     """)
@@ -462,6 +495,10 @@ def montar_grupos_orcamento(orcamento_id):
                     "valor_unitario": float(i["valor_unitario"]),
                     "valor_total": float(i["valor_total"]),
                     "observacao_item": i.get("observacao_item") or "",
+                    "tipo_desconto": i.get("tipo_desconto"),
+                    "valor_desconto": float(i["valor_desconto"]) if i.get("valor_desconto") is not None else 0.0,
+                    "motivo_desconto": i.get("motivo_desconto") or "",
+                    "desconto_calculado": float(i["desconto_calculado"]) if i.get("desconto_calculado") is not None else 0.0,
                 },
                 "materiais": [],
             }

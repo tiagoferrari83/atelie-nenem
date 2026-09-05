@@ -243,11 +243,51 @@ def gerar_pdf_os(prestador, cliente, grupos, observacoes="", data_entrega=None):
 
         total_geral += subtotal
 
-    pdf.ln(2)
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(sum(cw[:3]), 8, "TOTAL GERAL", border=1, align="R")
-    pdf.cell(cw[3], 8, f"R$ {formatar_moeda(total_geral)}", border=1, align="C")
-    pdf.ln(8)
+    # Coleta descontos dos serviços
+    descontos_os = []
+    for g in grupos:
+        d_val = float(g.get("desconto_calculado") or 0.0)
+        if d_val > 0:
+            motivo = (g.get("motivo_desconto") or "").strip() or "Desconto"
+            descontos_os.append({"motivo": motivo, "valor": d_val})
+
+    if descontos_os:
+        # Seção de Descontos na tabela
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(210, 210, 210)
+        pdf.cell(sum(cw), 6, _txt("  Descontos"), border=1, fill=True, ln=True)
+
+        pdf.set_font("Helvetica", "", 9)
+        total_descontos = 0.0
+        for d in descontos_os:
+            pdf.cell(cw[0], 6, "-", border=1, align="C")
+            pdf.cell(cw[1], 6, _txt(d["motivo"])[:60], border=1)
+            pdf.cell(cw[2], 6, "-", border=1, align="C")
+            pdf.cell(cw[3], 6, f"- {formatar_moeda(d['valor'])}", border=1, align="C")
+            pdf.ln()
+            total_descontos += d["valor"]
+
+        pdf.ln(2)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(sum(cw[:3]), 7, "Subtotal dos itens", border=1, align="R")
+        pdf.cell(cw[3], 7, f"R$ {formatar_moeda(total_geral)}", border=1, align="C")
+        pdf.ln()
+
+        pdf.cell(sum(cw[:3]), 7, "Subtotal dos descontos", border=1, align="R")
+        pdf.cell(cw[3], 7, f"- R$ {formatar_moeda(total_descontos)}", border=1, align="C")
+        pdf.ln()
+
+        total_liquido = max(0.0, total_geral - total_descontos)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(sum(cw[:3]), 8, "TOTAL GERAL", border=1, align="R")
+        pdf.cell(cw[3], 8, f"R$ {formatar_moeda(total_liquido)}", border=1, align="C")
+        pdf.ln(8)
+    else:
+        pdf.ln(2)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(sum(cw[:3]), 8, "TOTAL GERAL", border=1, align="R")
+        pdf.cell(cw[3], 8, f"R$ {formatar_moeda(total_geral)}", border=1, align="C")
+        pdf.ln(8)
 
     if observacoes:
         pdf.set_font("Helvetica", "B", 10)
@@ -256,8 +296,7 @@ def gerar_pdf_os(prestador, cliente, grupos, observacoes="", data_entrega=None):
         pdf.multi_cell(0, 5, _txt(observacoes))
         pdf.ln(4)
 
-    _bloco_assinaturas(pdf, prestador, cliente)
-
+    # Assinaturas removidas da Ordem de Serviço conforme solicitação
     out = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
     pdf.output(out)
     _limpar(logo_path)
@@ -344,11 +383,51 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
                 pdf.ln()
                 total_geral += item["valor_total"]
 
-        pdf.ln(2)
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(sum(cw[:3]), 8, "TOTAL GERAL", border=1, align="R")
-        pdf.cell(cw[3], 8, f"R$ {formatar_moeda(total_geral)}", border=1, align="C")
-        pdf.ln(8)
+        # Coleta descontos dos serviços
+        descontos_orc = []
+        for srv in secoes.get("servicos", []):
+            d_val = float(srv.get("desconto_calculado") or 0.0)
+            if d_val > 0:
+                motivo = (srv.get("motivo_desconto") or "").strip() or "Desconto"
+                descontos_orc.append({"motivo": motivo, "valor": d_val})
+
+        if descontos_orc:
+            # Seção de Descontos na tabela
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_fill_color(210, 210, 210)
+            pdf.cell(largura_total, 6, _txt("  Descontos"), border=1, fill=True, ln=True)
+
+            pdf.set_font("Helvetica", "", 9)
+            total_descontos = 0.0
+            for d in descontos_orc:
+                pdf.cell(cw[0], 6, "-", border=1, align="C")
+                pdf.cell(cw[1], 6, _txt(d["motivo"])[:60], border=1)
+                pdf.cell(cw[2], 6, "-", border=1, align="C")
+                pdf.cell(cw[3], 6, f"- {formatar_moeda(d['valor'])}", border=1, align="C")
+                pdf.ln()
+                total_descontos += d["valor"]
+
+            pdf.ln(2)
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(sum(cw[:3]), 7, "Subtotal dos itens", border=1, align="R")
+            pdf.cell(cw[3], 7, f"R$ {formatar_moeda(total_geral)}", border=1, align="C")
+            pdf.ln()
+
+            pdf.cell(sum(cw[:3]), 7, "Subtotal dos descontos", border=1, align="R")
+            pdf.cell(cw[3], 7, f"- R$ {formatar_moeda(total_descontos)}", border=1, align="C")
+            pdf.ln()
+
+            total_liquido = max(0.0, total_geral - total_descontos)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(sum(cw[:3]), 8, "TOTAL GERAL", border=1, align="R")
+            pdf.cell(cw[3], 8, f"R$ {formatar_moeda(total_liquido)}", border=1, align="C")
+            pdf.ln(8)
+        else:
+            pdf.ln(2)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(sum(cw[:3]), 8, "TOTAL GERAL", border=1, align="R")
+            pdf.cell(cw[3], 8, f"R$ {formatar_moeda(total_geral)}", border=1, align="C")
+            pdf.ln(8)
 
     # ── Descrição livre ──
     if descricao_livre:

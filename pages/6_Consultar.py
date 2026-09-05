@@ -73,18 +73,27 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
         grupos = montar_grupos_orcamento(doc["id"])
 
         total = 0
+        total_desconto = 0
         st.write("**Itens:**")
         for grupo in grupos:
             s = grupo["servico"]
             subtotal_grupo = s["valor_total"] + sum(m["valor_total"] for m in grupo["materiais"])
             total += subtotal_grupo
+            d_calc = s.get("desconto_calculado", 0.0)
+            total_desconto += d_calc
 
             s_desc_limpa, s_un = separar_descricao_unidade(str(s.get("descricao", "")))
             s_qtd_fmt = formatar_quantidade(s["quantidade"], s_un)
-            st.markdown(
+            linha_srv = (
                 f"**{s_desc_limpa}** — {s_qtd_fmt} x "
                 f"{formatar_reais(s['valor_unitario'])} = {formatar_reais(s['valor_total'])}"
             )
+            if d_calc > 0:
+                desc_info = f"-{formatar_reais(d_calc)}"
+                if s.get("tipo_desconto") == "percentual":
+                    desc_info = f"-{s['valor_desconto']}% ({formatar_reais(d_calc)})"
+                linha_srv += f"  \n　🏷️ *Desconto:* **{desc_info}** ({s.get('motivo_desconto') or 'Desconto'})"
+            st.markdown(linha_srv)
             # Observação do serviço (Bloco C)
             if s.get("observacao_item"):
                 st.caption(f"　📝 {s['observacao_item']}")
@@ -100,7 +109,12 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
             if grupo["materiais"]:
                 st.caption(f"Subtotal do serviço: {formatar_reais(subtotal_grupo)}")
 
-        st.markdown(f"**Total: {formatar_reais(total)}**")
+        if total_desconto > 0:
+            st.write(f"**Subtotal dos itens:** {formatar_reais(total)}")
+            st.write(f"**Subtotal dos descontos:** -{formatar_reais(total_desconto)}")
+            st.markdown(f"**Total geral:** {formatar_reais(total - total_desconto)}")
+        else:
+            st.markdown(f"**Total: {formatar_reais(total)}**")
 
         fotos = query(
             "SELECT id, url, storage_path FROM orcamento_fotos WHERE orcamento_id = %s ORDER BY id",
@@ -177,6 +191,10 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                                 "valor_unitario": float(i["valor_unitario"]),
                                 "valor_total": float(i["valor_total"]),
                                 "observacao_item": i.get("observacao_item") or "",
+                                "tipo_desconto": i.get("tipo_desconto"),
+                                "valor_desconto": float(i["valor_desconto"]) if i.get("valor_desconto") is not None else 0.0,
+                                "motivo_desconto": i.get("motivo_desconto") or "",
+                                "desconto_calculado": float(i["desconto_calculado"]) if i.get("desconto_calculado") is not None else 0.0,
                             }
                             if i["tipo_item"] == "servico":
                                 secoes_pdf["servicos"].append(entry)
@@ -205,6 +223,10 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                                 "valor_unitario": g["servico"]["valor_unitario"],
                                 "valor_total": g["servico"]["valor_total"],
                                 "observacao_item": g["servico"].get("observacao_item", ""),
+                                "tipo_desconto": g["servico"].get("tipo_desconto"),
+                                "valor_desconto": g["servico"].get("valor_desconto", 0.0),
+                                "motivo_desconto": g["servico"].get("motivo_desconto", ""),
+                                "desconto_calculado": g["servico"].get("desconto_calculado", 0.0),
                                 "materiais": g["materiais"],
                             }
                             for g in grupos

@@ -214,6 +214,30 @@ def _render_os():
             else:
                 st.caption(f"R\\$ {formatar_moeda(vb)}/{un} (sem acréscimo)")
             qtd_servico = st.number_input("Quantidade", min_value=0.0, step=0.5, key="os_qtd_servico")
+
+            # Desconto opcional
+            tipo_desc_os = st.radio(
+                "Desconto",
+                options=["Sem desconto", "Percentual (%)", "Valor (R$)"],
+                horizontal=True,
+                key="os_tipo_desconto",
+            )
+            val_desc_os = 0.0
+            motivo_desc_os = ""
+            if tipo_desc_os == "Percentual (%)":
+                col_d1, col_d2 = st.columns([1, 2])
+                with col_d1:
+                    val_desc_os = st.number_input("Desconto (%)", min_value=0.0, max_value=100.0, step=1.0, key="os_val_desc_pct")
+                with col_d2:
+                    motivo_desc_os = st.text_input("Motivo do desconto", key="os_motivo_desc_pct", placeholder="Ex: Cliente antigo, promoção...")
+            elif tipo_desc_os == "Valor (R$)":
+                col_d1, col_d2 = st.columns([1, 2])
+                with col_d1:
+                    val_desc_os = st.number_input("Desconto (R$)", min_value=0.0, step=5.0, key="os_val_desc_reais")
+                with col_d2:
+                    motivo_desc_os = st.text_input("Motivo do desconto", key="os_motivo_desc_reais", placeholder="Ex: Desconto pontual, pacote...")
+
+            obs_servico_os = st.text_input("Observação (opcional)", key="os_obs_servico", placeholder="Ex: reforçar costura lateral...")
         else:
             st.caption("Nenhum serviço cadastrado ainda.")
     with col_btn_srv:
@@ -230,12 +254,29 @@ def _render_os():
             un = TIPO_LABELS_SERVICO[s["tipo_cobranca"]]
             ac = COMPLEXIDADE_ACRESCIMO[complexidade]
             desc = f"{s['nome']}/{un}"
+
+            total_bruto = round(vu * qtd_servico, 2)
+            desconto_calc = 0.0
+            tipo_desconto_bd = None
+            if tipo_desc_os == "Percentual (%)" and val_desc_os > 0:
+                desconto_calc = round(total_bruto * (val_desc_os / 100.0), 2)
+                tipo_desconto_bd = "percentual"
+            elif tipo_desc_os == "Valor (R$)" and val_desc_os > 0:
+                desconto_calc = round(min(val_desc_os, total_bruto), 2)
+                tipo_desconto_bd = "valor"
+
+            motivo_final = (motivo_desc_os.strip() or "Desconto") if tipo_desconto_bd else ""
+
             st.session_state[chave_estado].append({
                 "servico": {
                     "item_id": s["id"], "descricao": desc,
                     "quantidade": qtd_servico, "valor_unitario": vu,
-                    "valor_total": round(vu * qtd_servico, 2),
-                    "observacao_item": "",
+                    "valor_total": total_bruto,
+                    "observacao_item": obs_servico_os,
+                    "tipo_desconto": tipo_desconto_bd,
+                    "valor_desconto": val_desc_os if tipo_desconto_bd else 0.0,
+                    "motivo_desconto": motivo_final,
+                    "desconto_calculado": desconto_calc,
                 },
                 "materiais": [],
             })
@@ -263,10 +304,16 @@ def _render_os():
                 with col_a:
                     s_desc_limpa, s_un = separar_descricao_unidade(str(s_item.get("descricao", "")))
                     s_qtd_fmt = formatar_quantidade(s_item["quantidade"], s_un)
-                    st.markdown(
+                    linha_srv = (
                         f"**{s_desc_limpa}** — {s_qtd_fmt} x "
                         f"{formatar_reais(s_item['valor_unitario'])} = {formatar_reais(s_item['valor_total'])}"
                     )
+                    if s_item.get("desconto_calculado", 0) > 0:
+                        desc_info = f"-{formatar_reais(s_item['desconto_calculado'])}"
+                        if s_item.get("tipo_desconto") == "percentual":
+                            desc_info = f"-{s_item['valor_desconto']}% ({formatar_reais(s_item['desconto_calculado'])})"
+                        linha_srv += f"  \n🏷️ *Desconto:* **{desc_info}** ({s_item.get('motivo_desconto') or 'Desconto'})"
+                    st.markdown(linha_srv)
                 with col_b:
                     if st.button("Remover", key=f"os_rem_srv_{idx_g}"):
                         st.session_state[chave_estado].pop(idx_g)
@@ -334,7 +381,13 @@ def _render_os():
                 st.markdown(f"**Subtotal: {formatar_reais(subtotal_g)}**")
             total_geral += subtotal_g
 
-        st.markdown(f"### Total geral: {formatar_reais(total_geral)}")
+        total_descontos = sum(g["servico"].get("desconto_calculado", 0.0) for g in st.session_state[chave_estado])
+        if total_descontos > 0:
+            st.markdown(f"**Subtotal dos itens:** {formatar_reais(total_geral)}")
+            st.markdown(f"**Subtotal dos descontos:** -{formatar_reais(total_descontos)}")
+            st.markdown(f"### Total geral: {formatar_reais(total_geral - total_descontos)}")
+        else:
+            st.markdown(f"### Total geral: {formatar_reais(total_geral)}")
 
     observacoes = st.text_area(
         "Observações gerais (opcional)",
@@ -378,16 +431,24 @@ def _render_os():
             res_item = execute(
                 """INSERT INTO orcamento_itens
                     (orcamento_id, tipo_item, item_id, descricao, quantidade,
-                     valor_unitario, valor_total, observacao_item)
-                   VALUES (%s,'servico',%s,%s,%s,%s,%s,%s) RETURNING id""",
+                     valor_unitario, valor_total, observacao_item,
+                     tipo_desconto, valor_desconto, motivo_desconto, desconto_calculado)
+                   VALUES (%s,'servico',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                 (orcamento_id, s["item_id"], s["descricao"], s["quantidade"],
-                 s["valor_unitario"], s["valor_total"], obs),
+                 s["valor_unitario"], s["valor_total"], obs,
+                 s.get("tipo_desconto"), s.get("valor_desconto", 0.0),
+                 s.get("motivo_desconto") or None, s.get("desconto_calculado", 0.0)),
             )
             srv_item_id = res_item["id"]
             itens_pdf.append({
                 "descricao": s["descricao"], "quantidade": s["quantidade"],
                 "valor_unitario": s["valor_unitario"], "valor_total": s["valor_total"],
-                "observacao_item": obs or "", "materiais": [],
+                "observacao_item": obs or "",
+                "tipo_desconto": s.get("tipo_desconto"),
+                "valor_desconto": s.get("valor_desconto", 0.0),
+                "motivo_desconto": s.get("motivo_desconto") or "",
+                "desconto_calculado": s.get("desconto_calculado", 0.0),
+                "materiais": [],
             })
             for m in grupo["materiais"]:
                 execute(
@@ -535,6 +596,29 @@ def _render_orcamento():
             else:
                 st.caption(f"R\\$ {formatar_moeda(vb)}/{un} (sem acréscimo)")
             qtd_srv = st.number_input("Quantidade", min_value=0.0, step=0.5, key="orc_qtd_srv")
+
+            # Desconto opcional
+            tipo_desc_orc = st.radio(
+                "Desconto",
+                options=["Sem desconto", "Percentual (%)", "Valor (R$)"],
+                horizontal=True,
+                key="orc_tipo_desconto",
+            )
+            val_desc_orc = 0.0
+            motivo_desc_orc = ""
+            if tipo_desc_orc == "Percentual (%)":
+                col_d1, col_d2 = st.columns([1, 2])
+                with col_d1:
+                    val_desc_orc = st.number_input("Desconto (%)", min_value=0.0, max_value=100.0, step=1.0, key="orc_val_desc_pct")
+                with col_d2:
+                    motivo_desc_orc = st.text_input("Motivo do desconto", key="orc_motivo_desc_pct", placeholder="Ex: Cliente antigo, promoção...")
+            elif tipo_desc_orc == "Valor (R$)":
+                col_d1, col_d2 = st.columns([1, 2])
+                with col_d1:
+                    val_desc_orc = st.number_input("Desconto (R$)", min_value=0.0, step=5.0, key="orc_val_desc_reais")
+                with col_d2:
+                    motivo_desc_orc = st.text_input("Motivo do desconto", key="orc_motivo_desc_reais", placeholder="Ex: Desconto pontual, pacote...")
+
             obs_srv_add = st.text_input(
                 "Observação (opcional)", key="orc_obs_srv_add",
                 placeholder="Ex: reforçar costura, acabamento especial...",
@@ -555,11 +639,28 @@ def _render_orcamento():
             un = TIPO_LABELS_SERVICO[s["tipo_cobranca"]]
             ac = COMPLEXIDADE_ACRESCIMO[complexidade]
             desc = f"{s['nome']}/{un}"
+
+            total_bruto = round(vu * qtd_srv, 2)
+            desconto_calc = 0.0
+            tipo_desconto_bd = None
+            if tipo_desc_orc == "Percentual (%)" and val_desc_orc > 0:
+                desconto_calc = round(total_bruto * (val_desc_orc / 100.0), 2)
+                tipo_desconto_bd = "percentual"
+            elif tipo_desc_orc == "Valor (R$)" and val_desc_orc > 0:
+                desconto_calc = round(min(val_desc_orc, total_bruto), 2)
+                tipo_desconto_bd = "valor"
+
+            motivo_final = (motivo_desc_orc.strip() or "Desconto") if tipo_desconto_bd else ""
+
             st.session_state[chave_servicos].append({
                 "item_id": s["id"], "descricao": desc,
                 "quantidade": qtd_srv, "valor_unitario": vu,
-                "valor_total": round(vu * qtd_srv, 2),
+                "valor_total": total_bruto,
                 "observacao_item": obs_srv_add,
+                "tipo_desconto": tipo_desconto_bd,
+                "valor_desconto": val_desc_orc if tipo_desconto_bd else 0.0,
+                "motivo_desconto": motivo_final,
+                "desconto_calculado": desconto_calc,
             })
             st.rerun()
         else:
@@ -568,14 +669,21 @@ def _render_orcamento():
     _listar_itens_simples(chave_servicos, prefixo="srv")
 
     # ── Total geral ──
-    total = (
+    subtotal_itens = (
         sum(i["valor_total"] for i in st.session_state[chave_tecidos])
         + sum(i["valor_total"] for i in st.session_state[chave_aviamentos])
         + sum(i["valor_total"] for i in st.session_state[chave_outros])
         + sum(i["valor_total"] for i in st.session_state[chave_servicos])
     )
-    if total > 0:
-        st.markdown(f"### Total geral: {formatar_reais(total)}")
+    total_descontos = sum(i.get("desconto_calculado", 0.0) for i in st.session_state[chave_servicos])
+
+    if subtotal_itens > 0:
+        if total_descontos > 0:
+            st.markdown(f"**Subtotal dos itens:** {formatar_reais(subtotal_itens)}")
+            st.markdown(f"**Subtotal dos descontos:** -{formatar_reais(total_descontos)}")
+            st.markdown(f"### Total geral: {formatar_reais(subtotal_itens - total_descontos)}")
+        else:
+            st.markdown(f"### Total geral: {formatar_reais(subtotal_itens)}")
 
     st.divider()
 
@@ -688,11 +796,14 @@ def _render_orcamento():
             execute(
                 """INSERT INTO orcamento_itens
                     (orcamento_id, tipo_item, item_id, descricao, quantidade,
-                     valor_unitario, valor_total, observacao_item)
-                   VALUES (%s,'servico',%s,%s,%s,%s,%s,%s)""",
+                     valor_unitario, valor_total, observacao_item,
+                     tipo_desconto, valor_desconto, motivo_desconto, desconto_calculado)
+                   VALUES (%s,'servico',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (orcamento_id, item["item_id"], item["descricao"], item["quantidade"],
                  item["valor_unitario"], item["valor_total"],
-                 item.get("observacao_item") or None),
+                 item.get("observacao_item") or None,
+                 item.get("tipo_desconto"), item.get("valor_desconto", 0.0),
+                 item.get("motivo_desconto") or None, item.get("desconto_calculado", 0.0)),
             )
 
         # Salva novas fotos e registra configuração página inteira
@@ -816,6 +927,11 @@ def _listar_itens_simples(chave, prefixo):
                 f"**{desc_limpa}** — {qtd_formatada} x "
                 f"{formatar_reais(item['valor_unitario'])} = {formatar_reais(item['valor_total'])}"
             )
+            if item.get("desconto_calculado", 0) > 0:
+                desc_info = f"-{formatar_reais(item['desconto_calculado'])}"
+                if item.get("tipo_desconto") == "percentual":
+                    desc_info = f"-{item['valor_desconto']}% ({formatar_reais(item['desconto_calculado'])})"
+                linha += f"  \n🏷️ *Desconto:* **{desc_info}** ({item.get('motivo_desconto') or 'Desconto'})"
             if item.get("observacao_item"):
                 linha += f"  \n　*{item['observacao_item']}*"
             st.markdown(linha)
@@ -849,6 +965,10 @@ def _carregar_itens_orcamento(orcamento_id, chave_tecidos, chave_aviamentos, cha
             "valor_unitario": float(i["valor_unitario"]),
             "valor_total": float(i["valor_total"]),
             "observacao_item": i.get("observacao_item") or "",
+            "tipo_desconto": i.get("tipo_desconto"),
+            "valor_desconto": float(i["valor_desconto"]) if i.get("valor_desconto") is not None else 0.0,
+            "motivo_desconto": i.get("motivo_desconto") or "",
+            "desconto_calculado": float(i["desconto_calculado"]) if i.get("desconto_calculado") is not None else 0.0,
         }
         if i["tipo_item"] == "servico":
             servicos.append(entry)
