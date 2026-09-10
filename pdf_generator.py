@@ -458,6 +458,7 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
 
     # Processa fotos: página inteira separada, normais em grade 2×2 com proporção
     buf_normais = []
+    houve_foto_inteira = False  # rastreia se alguma foto "página inteira" foi inserida
 
     def descarregar_buf():
         nonlocal buf_normais
@@ -469,6 +470,7 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
         if img["pagina_inteira"]:
             descarregar_buf()
             _pagina_foto_inteira_prop(pdf, img["path"])
+            houve_foto_inteira = True
         else:
             buf_normais.append(img["path"])
             if len(buf_normais) == 4:
@@ -499,6 +501,11 @@ def gerar_pdf_orcamento(prestador, cliente, secoes, descricao_livre="",
             descarregar_buf()
             _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente)
     else:
+        # Se a última coisa inserida foi uma foto "página inteira", as cláusulas
+        # devem sempre começar em uma nova página, pois o cursor fica no topo
+        # da página da foto (a imagem é posicionada com coordenadas absolutas).
+        if houve_foto_inteira:
+            pdf.add_page()
         _inserir_clausulas_e_assinaturas(pdf, clausulas, prestador, cliente)
 
     _limpar(*[i["path"] for i in imgs_baixadas])
