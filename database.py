@@ -385,8 +385,22 @@ def init_db():
             orcamento_id INTEGER REFERENCES orcamentos(id) ON DELETE CASCADE,
             url TEXT NOT NULL,
             storage_path TEXT NOT NULL,
+            pagina_inteira BOOLEAN NOT NULL DEFAULT FALSE,
             criado_em TIMESTAMP DEFAULT NOW()
         );
+    """)
+
+    # Compatibilidade: adiciona coluna pagina_inteira em orcamento_fotos para bancos já existentes
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'orcamento_fotos' AND column_name = 'pagina_inteira'
+            ) THEN
+                ALTER TABLE orcamento_fotos ADD COLUMN pagina_inteira BOOLEAN NOT NULL DEFAULT FALSE;
+            END IF;
+        END $$;
     """)
 
     conn.commit()

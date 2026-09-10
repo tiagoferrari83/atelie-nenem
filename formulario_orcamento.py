@@ -707,9 +707,13 @@ def _render_orcamento():
     fotos_existentes = []
     if edicao:
         fotos_existentes = query(
-            "SELECT id, url, storage_path FROM orcamento_fotos WHERE orcamento_id=%s ORDER BY id",
+            "SELECT id, url, storage_path, pagina_inteira FROM orcamento_fotos WHERE orcamento_id=%s ORDER BY id",
             (edicao["orcamento_id"],),
         )
+        # Pré-popula chave_fotos_cfg com os valores salvos no banco (apenas na primeira carga)
+        if fotos_existentes and not st.session_state[chave_fotos_cfg]:
+            for foto in fotos_existentes:
+                st.session_state[chave_fotos_cfg][foto["id"]] = bool(foto.get("pagina_inteira", False))
     if fotos_existentes:
         st.write("Fotos já anexadas:")
         for foto in fotos_existentes:
@@ -810,24 +814,31 @@ def _render_orcamento():
         fotos_para_pdf_existentes = []
         if fotos_existentes:
             for foto in fotos_existentes:
+                pi = st.session_state[chave_fotos_cfg].get(foto["id"], False)
+                # Persiste o valor de pagina_inteira no banco
+                execute(
+                    "UPDATE orcamento_fotos SET pagina_inteira=%s WHERE id=%s",
+                    (pi, foto["id"]),
+                )
                 fotos_para_pdf_existentes.append({
                     "url": foto["url"],
-                    "pagina_inteira": st.session_state[chave_fotos_cfg].get(foto["id"], False),
+                    "pagina_inteira": pi,
                 })
 
         fotos_para_pdf_novas = []
         if fotos_upload:
             for foto in fotos_upload:
                 extensao = foto.name.split(".")[-1].lower()
+                pi_nova = cfg_novas.get(foto.name, False)
                 try:
                     url_pub, spath = upload_foto(orcamento_id, foto.read(), extensao)
                     execute(
-                        "INSERT INTO orcamento_fotos (orcamento_id, url, storage_path) VALUES (%s,%s,%s)",
-                        (orcamento_id, url_pub, spath),
+                        "INSERT INTO orcamento_fotos (orcamento_id, url, storage_path, pagina_inteira) VALUES (%s,%s,%s,%s)",
+                        (orcamento_id, url_pub, spath, pi_nova),
                     )
                     fotos_para_pdf_novas.append({
                         "url": url_pub,
-                        "pagina_inteira": cfg_novas.get(foto.name, False),
+                        "pagina_inteira": pi_nova,
                     })
                 except Exception as e:
                     st.warning(f"Não foi possível enviar '{foto.name}': {e}")

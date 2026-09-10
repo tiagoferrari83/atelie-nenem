@@ -72,9 +72,36 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
 
         grupos = montar_grupos_orcamento(doc["id"])
 
+        # Para orçamentos, busca também itens de materia_prima que são nível raiz
+        # (servico_pai_item_id IS NULL) — eles não fazem parte de grupos de serviço
+        itens_materiais_raiz = []
+        if is_orcamento:
+            itens_materiais_raiz = query(
+                """SELECT descricao, quantidade, valor_unitario, valor_total, observacao_item
+                   FROM orcamento_itens
+                   WHERE orcamento_id = %s AND tipo_item = 'materia_prima'
+                     AND servico_pai_item_id IS NULL
+                   ORDER BY id""",
+                (doc["id"],),
+            )
+
         total = 0
         total_desconto = 0
         st.write("**Itens:**")
+
+        # Exibe materiais raiz (tecidos, aviamentos, outros) para orçamentos
+        if itens_materiais_raiz:
+            for m in itens_materiais_raiz:
+                m_desc_limpa, m_un = separar_descricao_unidade(str(m.get("descricao", "")))
+                m_qtd_fmt = formatar_quantidade(m["quantidade"], m_un)
+                total += float(m["valor_total"])
+                st.markdown(
+                    f"{m_desc_limpa} — {m_qtd_fmt} x "
+                    f"{formatar_reais(float(m['valor_unitario']))} = {formatar_reais(float(m['valor_total']))}"
+                )
+                if m.get("observacao_item"):
+                    st.caption(f"　📝 {m['observacao_item']}")
+
         for grupo in grupos:
             s = grupo["servico"]
             subtotal_grupo = s["valor_total"] + sum(m["valor_total"] for m in grupo["materiais"])
@@ -108,6 +135,9 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
 
             if grupo["materiais"]:
                 st.caption(f"Subtotal do serviço: {formatar_reais(subtotal_grupo)}")
+
+        if not itens_materiais_raiz and not grupos:
+            st.caption("Nenhum item registrado.")
 
         if total_desconto > 0:
             st.write(f"**Subtotal dos itens:** {formatar_reais(total)}")
@@ -149,6 +179,7 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                     "observacoes": doc["observacoes"],
                     "data_validade": doc["data_validade"],
                     "data_entrega": doc["data_entrega"],
+                    "descricao_livre": doc.get("descricao_livre") or "",
                     "grupos": [
                         {"servico": g["servico"], "materiais": g["materiais"]}
                         for g in grupos
@@ -202,10 +233,10 @@ def renderizar_documento(doc, clientes, id_foco, tipo_operacao):
                                 secoes_pdf[MAP_TIPO.get(i.get("tipo_material"), "outros")].append(entry)
 
                         fotos_bd = query(
-                            "SELECT url FROM orcamento_fotos WHERE orcamento_id=%s ORDER BY id",
+                            "SELECT url, pagina_inteira FROM orcamento_fotos WHERE orcamento_id=%s ORDER BY id",
                             (doc["id"],),
                         )
-                        fotos_pdf = [{"url": f["url"], "pagina_inteira": False} for f in fotos_bd]
+                        fotos_pdf = [{"url": f["url"], "pagina_inteira": bool(f.get("pagina_inteira", False))} for f in fotos_bd]
 
                         pdf_path = gerar_pdf_orcamento(
                             prestador=prestador_pdf,
