@@ -22,19 +22,20 @@
       color: #f5f5f5;
       -webkit-tap-highlight-color: transparent;
     }
-    /* Cantos sutilmente arredondados (3px a 4px) em todos os elementos */
-    .rounded-2xl, .rounded-xl, .rounded-lg, .rounded-full {
-      border-radius: 4px !important;
+    /* Raio intermediário equilibrado: 8px para quadros/cards e 6px para campos/botões */
+    .rounded, .rounded-2xl, .rounded-xl, .rounded-lg {
+      border-radius: 8px !important;
     }
     input:not([type="checkbox"]):not([type="file"]),
     select,
     textarea,
     button {
-      border-radius: 3px !important;
+      border-radius: 6px !important;
     }
     input:not([type="checkbox"]):not([type="file"]),
     select,
-    textarea {
+    textarea,
+    .combo-trigger {
       background-color: #121212 !important;
       border-color: #2e2e2e !important;
       color: #f5f5f5 !important;
@@ -48,7 +49,7 @@
     textarea:focus {
       border-color: #8b5cf6 !important;
       outline: none !important;
-      box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.35) !important;
+      box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3) !important;
     }
     option, optgroup {
       background-color: #141414;
@@ -249,7 +250,7 @@
               <button @click="abrirDocumentoNoConsultar(os.id, 'ordem_servico')"
                       class="w-full text-left p-3.5 bg-[#111111] border border-neutral-800 hover:border-violet-500/60 hover:bg-neutral-800/60 transition flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div class="flex items-center gap-2">
-                  <span class="px-2 py-0.5 text-xs font-medium border" :class="corStatusBadge(os.status)" x-text="labelStatus('ordem_servico', os.status)"></span>
+                  <span class="px-2 py-0.5 text-xs font-medium border rounded" :class="corStatusBadge(os.status)" x-text="labelStatus('ordem_servico', os.status)"></span>
                   <span class="font-semibold text-neutral-100" x-text="`#${os.id} ${os.cliente_nome}`"></span>
                 </div>
                 <span class="text-xs text-neutral-400" x-text="os.data_entrega ? `Entrega: ${os.data_entrega}` : 'Sem data definida'"></span>
@@ -272,7 +273,7 @@
                   <span class="font-semibold text-neutral-100" x-text="`#${os.id} ${os.cliente_nome}`"></span>
                   <span class="text-xs text-neutral-400 ml-2" x-text="os.data_entrega"></span>
                 </div>
-                <span class="text-xs font-bold px-2.5 py-1 bg-violet-950 border border-violet-700 text-violet-300"
+                <span class="text-xs font-bold px-2.5 py-1 rounded bg-violet-950 border border-violet-700 text-violet-300"
                       x-text="os.dias_restantes === 0 ? 'Hoje!' : (os.dias_restantes === 1 ? 'Amanhã' : `em ${os.dias_restantes} dias`)"></span>
               </button>
             </template>
@@ -292,7 +293,7 @@
           <button x-show="orcForm.editandoId" @click="resetarOrcamento()" class="text-xs text-rose-400 hover:underline">Cancelar edição</button>
         </div>
 
-        <!-- Cliente e Validade -->
+        <!-- Cliente (Combobox Pesquisável) e Validade -->
         <div class="bg-[#161616] rounded shadow-sm border border-neutral-800 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <div class="flex justify-between items-center mb-1">
@@ -300,12 +301,36 @@
               <button type="button" @click="modal = { tipo: 'rapido_cliente', dados: { nome: '', telefone: '', email: '', endereco: '' } }"
                       class="text-xs text-violet-400 font-semibold hover:underline">➕ Novo cliente</button>
             </div>
-            <select x-model="orcForm.cliente_id" class="w-full px-3.5 py-2.5 border text-sm">
-              <template x-for="c in clientes" :key="c.id">
-                <option :value="c.id" x-text="c.nome"></option>
-              </template>
-            </select>
+            <!-- Combobox Cliente Orçamento -->
+            <div class="relative" x-data="{ aberto: false, busca: '' }" @click.outside="aberto = false">
+              <button type="button" x-show="!aberto"
+                      @click="aberto = true; busca = ''; $nextTick(() => $refs.buscaCliOrc.focus())"
+                      class="combo-trigger w-full px-3.5 py-2.5 border text-sm text-left flex items-center justify-between">
+                <span class="truncate" x-text="labelClienteSelecionado(orcForm.cliente_id)"></span>
+                <span class="text-neutral-400 text-xs ml-2">🔎 ▾</span>
+              </button>
+              <input x-show="aberto" x-ref="buscaCliOrc" type="text" x-model="busca"
+                     placeholder="🔎 Digite o nome do cliente..."
+                     @keydown.escape="aberto = false"
+                     class="w-full px-3.5 py-2.5 border text-sm" />
+              <div x-show="aberto"
+                   class="absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto bg-[#181818] border border-neutral-700 rounded shadow-2xl z-40 divide-y divide-neutral-800/70">
+                <template x-for="op in filtrarListaCombo(opcoesClientes(), busca)" :key="op.id">
+                  <button type="button"
+                          @click="orcForm.cliente_id = op.id; aberto = false"
+                          class="w-full text-left px-3.5 py-2.5 text-sm hover:bg-violet-600/25 transition"
+                          :class="Number(orcForm.cliente_id) === Number(op.id) ? 'bg-violet-600/20 text-violet-300 font-semibold' : 'text-neutral-200'">
+                    <span x-text="op.label"></span>
+                  </button>
+                </template>
+                <div x-show="filtrarListaCombo(opcoesClientes(), busca).length === 0"
+                     class="px-3.5 py-3 text-xs text-neutral-500 text-center">
+                  Nenhum cliente encontrado.
+                </div>
+              </div>
+            </div>
           </div>
+
           <div>
             <label class="block text-sm font-medium text-neutral-300 mb-1">Validade do orçamento</label>
             <input type="date" x-model="orcForm.data_validade" class="w-full px-3.5 py-2.5 border text-sm" />
@@ -328,11 +353,34 @@
             <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
               <div class="sm:col-span-5">
                 <label class="block text-xs text-neutral-400 mb-1">Material</label>
-                <select x-model="orcForm[sec.inp].item_id" class="w-full px-3 py-2 border text-sm">
-                  <template x-for="m in materiaisPorTipo(sec.tipo)" :key="m.id">
-                    <option :value="m.id" x-text="`${m.nome} (R$ ${formatarMoeda(m.valor)}/${UNIDADES_MATERIAL[m.tipo_medida]})`"></option>
-                  </template>
-                </select>
+                <!-- Combobox Material por Seção -->
+                <div class="relative" x-data="{ aberto: false, busca: '' }" @click.outside="aberto = false">
+                  <button type="button" x-show="!aberto"
+                          @click="aberto = true; busca = ''; $nextTick(() => $refs.buscaMatSec.focus())"
+                          class="combo-trigger w-full px-3 py-2 border text-sm text-left flex items-center justify-between">
+                    <span class="truncate" x-text="labelMaterialSelecionado(orcForm[sec.inp].item_id)"></span>
+                    <span class="text-neutral-400 text-xs ml-2">🔎 ▾</span>
+                  </button>
+                  <input x-show="aberto" x-ref="buscaMatSec" type="text" x-model="busca"
+                         placeholder="🔎 Digite para buscar material..."
+                         @keydown.escape="aberto = false"
+                         class="w-full px-3 py-2 border text-sm" />
+                  <div x-show="aberto"
+                       class="absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto bg-[#181818] border border-neutral-700 rounded shadow-2xl z-40 divide-y divide-neutral-800/70">
+                    <template x-for="op in filtrarListaCombo(opcoesMateriaisPorTipo(sec.tipo), busca)" :key="op.id">
+                      <button type="button"
+                              @click="orcForm[sec.inp].item_id = op.id; aberto = false"
+                              class="w-full text-left px-3 py-2.5 text-sm hover:bg-violet-600/25 transition"
+                              :class="Number(orcForm[sec.inp].item_id) === Number(op.id) ? 'bg-violet-600/20 text-violet-300 font-semibold' : 'text-neutral-200'">
+                        <span x-text="op.label"></span>
+                      </button>
+                    </template>
+                    <div x-show="filtrarListaCombo(opcoesMateriaisPorTipo(sec.tipo), busca).length === 0"
+                         class="px-3 py-3 text-xs text-neutral-500 text-center">
+                      Nenhum material encontrado.
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="sm:col-span-2">
                 <label class="block text-xs text-neutral-400 mb-1">Qtd.</label>
@@ -378,11 +426,34 @@
           <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
             <div class="sm:col-span-5">
               <label class="block text-xs text-neutral-400 mb-1">Serviço</label>
-              <select x-model="orcForm.inServico.item_id" class="w-full px-3 py-2 border text-sm">
-                <template x-for="s in servicos" :key="s.id">
-                  <option :value="s.id" x-text="`${s.nome} (R$ ${formatarMoeda(s.valor)}/${UNIDADES_SERVICO[s.tipo_cobranca]})`"></option>
-                </template>
-              </select>
+              <!-- Combobox Serviço Orçamento -->
+              <div class="relative" x-data="{ aberto: false, busca: '' }" @click.outside="aberto = false">
+                <button type="button" x-show="!aberto"
+                        @click="aberto = true; busca = ''; $nextTick(() => $refs.buscaSrvOrc.focus())"
+                        class="combo-trigger w-full px-3 py-2 border text-sm text-left flex items-center justify-between">
+                  <span class="truncate" x-text="labelServicoSelecionado(orcForm.inServico.item_id)"></span>
+                  <span class="text-neutral-400 text-xs ml-2">🔎 ▾</span>
+                </button>
+                <input x-show="aberto" x-ref="buscaSrvOrc" type="text" x-model="busca"
+                       placeholder="🔎 Digite para buscar serviço..."
+                       @keydown.escape="aberto = false"
+                       class="w-full px-3 py-2 border text-sm" />
+                <div x-show="aberto"
+                     class="absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto bg-[#181818] border border-neutral-700 rounded shadow-2xl z-40 divide-y divide-neutral-800/70">
+                  <template x-for="op in filtrarListaCombo(opcoesServicos(), busca)" :key="op.id">
+                    <button type="button"
+                            @click="orcForm.inServico.item_id = op.id; aberto = false"
+                            class="w-full text-left px-3 py-2.5 text-sm hover:bg-violet-600/25 transition"
+                            :class="Number(orcForm.inServico.item_id) === Number(op.id) ? 'bg-violet-600/20 text-violet-300 font-semibold' : 'text-neutral-200'">
+                      <span x-text="op.label"></span>
+                    </button>
+                  </template>
+                  <div x-show="filtrarListaCombo(opcoesServicos(), busca).length === 0"
+                       class="px-3 py-3 text-xs text-neutral-500 text-center">
+                    Nenhum serviço encontrado.
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="sm:col-span-4">
               <label class="block text-xs text-neutral-400 mb-1">Complexidade</label>
@@ -519,6 +590,7 @@
           <button x-show="osForm.editandoId" @click="resetarOS()" class="text-xs text-rose-400 hover:underline">Cancelar edição</button>
         </div>
 
+        <!-- Cliente (Combobox Pesquisável) e Entrega -->
         <div class="bg-[#161616] rounded shadow-sm border border-neutral-800 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <div class="flex justify-between items-center mb-1">
@@ -526,11 +598,34 @@
               <button type="button" @click="modal = { tipo: 'rapido_cliente', dados: { nome: '', telefone: '', email: '', endereco: '' } }"
                       class="text-xs text-violet-400 font-semibold hover:underline">➕ Novo cliente</button>
             </div>
-            <select x-model="osForm.cliente_id" class="w-full px-3.5 py-2.5 border text-sm">
-              <template x-for="c in clientes" :key="c.id">
-                <option :value="c.id" x-text="c.nome"></option>
-              </template>
-            </select>
+            <!-- Combobox Cliente OS -->
+            <div class="relative" x-data="{ aberto: false, busca: '' }" @click.outside="aberto = false">
+              <button type="button" x-show="!aberto"
+                      @click="aberto = true; busca = ''; $nextTick(() => $refs.buscaCliOs.focus())"
+                      class="combo-trigger w-full px-3.5 py-2.5 border text-sm text-left flex items-center justify-between">
+                <span class="truncate" x-text="labelClienteSelecionado(osForm.cliente_id)"></span>
+                <span class="text-neutral-400 text-xs ml-2">🔎 ▾</span>
+              </button>
+              <input x-show="aberto" x-ref="buscaCliOs" type="text" x-model="busca"
+                     placeholder="🔎 Digite o nome do cliente..."
+                     @keydown.escape="aberto = false"
+                     class="w-full px-3.5 py-2.5 border text-sm" />
+              <div x-show="aberto"
+                   class="absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto bg-[#181818] border border-neutral-700 rounded shadow-2xl z-40 divide-y divide-neutral-800/70">
+                <template x-for="op in filtrarListaCombo(opcoesClientes(), busca)" :key="op.id">
+                  <button type="button"
+                          @click="osForm.cliente_id = op.id; aberto = false"
+                          class="w-full text-left px-3.5 py-2.5 text-sm hover:bg-violet-600/25 transition"
+                          :class="Number(osForm.cliente_id) === Number(op.id) ? 'bg-violet-600/20 text-violet-300 font-semibold' : 'text-neutral-200'">
+                    <span x-text="op.label"></span>
+                  </button>
+                </template>
+                <div x-show="filtrarListaCombo(opcoesClientes(), busca).length === 0"
+                     class="px-3.5 py-3 text-xs text-neutral-500 text-center">
+                  Nenhum cliente encontrado.
+                </div>
+              </div>
+            </div>
           </div>
           <div>
             <label class="block text-sm font-medium text-neutral-300 mb-1">Data de entrega prevista</label>
@@ -549,11 +644,34 @@
           <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
             <div class="sm:col-span-5">
               <label class="block text-xs text-neutral-400 mb-1">Serviço</label>
-              <select x-model="osForm.inServico.item_id" class="w-full px-3 py-2 border text-sm">
-                <template x-for="s in servicos" :key="s.id">
-                  <option :value="s.id" x-text="`${s.nome} (R$ ${formatarMoeda(s.valor)}/${UNIDADES_SERVICO[s.tipo_cobranca]})`"></option>
-                </template>
-              </select>
+              <!-- Combobox Serviço OS -->
+              <div class="relative" x-data="{ aberto: false, busca: '' }" @click.outside="aberto = false">
+                <button type="button" x-show="!aberto"
+                        @click="aberto = true; busca = ''; $nextTick(() => $refs.buscaSrvOs.focus())"
+                        class="combo-trigger w-full px-3 py-2 border text-sm text-left flex items-center justify-between">
+                  <span class="truncate" x-text="labelServicoSelecionado(osForm.inServico.item_id)"></span>
+                  <span class="text-neutral-400 text-xs ml-2">🔎 ▾</span>
+                </button>
+                <input x-show="aberto" x-ref="buscaSrvOs" type="text" x-model="busca"
+                       placeholder="🔎 Digite para buscar serviço..."
+                       @keydown.escape="aberto = false"
+                       class="w-full px-3 py-2 border text-sm" />
+                <div x-show="aberto"
+                     class="absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto bg-[#181818] border border-neutral-700 rounded shadow-2xl z-40 divide-y divide-neutral-800/70">
+                  <template x-for="op in filtrarListaCombo(opcoesServicos(), busca)" :key="op.id">
+                    <button type="button"
+                            @click="osForm.inServico.item_id = op.id; aberto = false"
+                            class="w-full text-left px-3 py-2.5 text-sm hover:bg-violet-600/25 transition"
+                            :class="Number(osForm.inServico.item_id) === Number(op.id) ? 'bg-violet-600/20 text-violet-300 font-semibold' : 'text-neutral-200'">
+                      <span x-text="op.label"></span>
+                    </button>
+                  </template>
+                  <div x-show="filtrarListaCombo(opcoesServicos(), busca).length === 0"
+                       class="px-3 py-3 text-xs text-neutral-500 text-center">
+                    Nenhum serviço encontrado.
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="sm:col-span-4">
               <label class="block text-xs text-neutral-400 mb-1">Complexidade</label>
@@ -626,15 +744,37 @@
                 </template>
               </div>
 
-              <!-- Adicionar matéria-prima ao serviço -->
+              <!-- Adicionar matéria-prima ao serviço (Combobox Pesquisável) -->
               <div class="pt-2 border-t border-neutral-800 flex flex-col sm:flex-row gap-2 items-end">
                 <div class="flex-1 w-full">
                   <label class="block text-xs text-neutral-400 mb-1">Adicionar matéria-prima a este serviço</label>
-                  <select x-model="grupo.inMatId" class="w-full px-3 py-1.5 border text-xs">
-                    <template x-for="m in materiais" :key="m.id">
-                      <option :value="m.id" x-text="`${m.nome} (R$ ${formatarMoeda(m.valor)}/${UNIDADES_MATERIAL[m.tipo_medida]})`"></option>
-                    </template>
-                  </select>
+                  <div class="relative" x-data="{ aberto: false, busca: '' }" @click.outside="aberto = false">
+                    <button type="button" x-show="!aberto"
+                            @click="aberto = true; busca = ''; $nextTick(() => $refs.buscaMatGrp.focus())"
+                            class="combo-trigger w-full px-3 py-1.5 border text-xs text-left flex items-center justify-between">
+                      <span class="truncate" x-text="labelMaterialSelecionado(grupo.inMatId)"></span>
+                      <span class="text-neutral-400 text-xs ml-2">🔎 ▾</span>
+                    </button>
+                    <input x-show="aberto" x-ref="buscaMatGrp" type="text" x-model="busca"
+                           placeholder="🔎 Digite para buscar material..."
+                           @keydown.escape="aberto = false"
+                           class="w-full px-3 py-1.5 border text-xs" />
+                    <div x-show="aberto"
+                         class="absolute left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto bg-[#181818] border border-neutral-700 rounded shadow-2xl z-40 divide-y divide-neutral-800/70">
+                      <template x-for="op in filtrarListaCombo(opcoesTodosMateriais(), busca)" :key="op.id">
+                        <button type="button"
+                                @click="grupo.inMatId = op.id; aberto = false"
+                                class="w-full text-left px-3 py-2 text-xs hover:bg-violet-600/25 transition"
+                                :class="Number(grupo.inMatId) === Number(op.id) ? 'bg-violet-600/20 text-violet-300 font-semibold' : 'text-neutral-200'">
+                          <span x-text="op.label"></span>
+                        </button>
+                      </template>
+                      <div x-show="filtrarListaCombo(opcoesTodosMateriais(), busca).length === 0"
+                           class="px-3 py-2.5 text-xs text-neutral-500 text-center">
+                        Nenhum material encontrado.
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div class="w-full sm:w-24">
                   <label class="block text-xs text-neutral-400 mb-1">Qtd.</label>
@@ -710,12 +850,30 @@
         <div class="bg-[#161616] rounded shadow-sm border border-neutral-800 p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-xs text-neutral-400 mb-1">Filtrar por Cliente</label>
-            <select x-model="consultar.filtroCliente" class="w-full px-3 py-2 border text-sm">
-              <option value="">Todos os clientes</option>
-              <template x-for="c in clientes" :key="c.id">
-                <option :value="c.id" x-text="c.nome"></option>
-              </template>
-            </select>
+            <!-- Combobox Filtro Cliente Consultar -->
+            <div class="relative" x-data="{ aberto: false, busca: '' }" @click.outside="aberto = false">
+              <button type="button" x-show="!aberto"
+                      @click="aberto = true; busca = ''; $nextTick(() => $refs.buscaCliFiltro.focus())"
+                      class="combo-trigger w-full px-3 py-2 border text-sm text-left flex items-center justify-between">
+                <span class="truncate" x-text="labelClienteSelecionado(consultar.filtroCliente, 'Todos os clientes')"></span>
+                <span class="text-neutral-400 text-xs ml-2">🔎 ▾</span>
+              </button>
+              <input x-show="aberto" x-ref="buscaCliFiltro" type="text" x-model="busca"
+                     placeholder="🔎 Digite o nome do cliente..."
+                     @keydown.escape="aberto = false"
+                     class="w-full px-3 py-2 border text-sm" />
+              <div x-show="aberto"
+                   class="absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto bg-[#181818] border border-neutral-700 rounded shadow-2xl z-40 divide-y divide-neutral-800/70">
+                <template x-for="op in filtrarListaCombo(opcoesClientes(true), busca)" :key="String(op.id)">
+                  <button type="button"
+                          @click="consultar.filtroCliente = op.id; aberto = false"
+                          class="w-full text-left px-3 py-2.5 text-sm hover:bg-violet-600/25 transition"
+                          :class="String(consultar.filtroCliente) === String(op.id) ? 'bg-violet-600/20 text-violet-300 font-semibold' : 'text-neutral-200'">
+                    <span x-text="op.label"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
           </div>
           <div x-show="consultar.aba === 'orcamento'">
             <label class="block text-xs text-neutral-400 mb-1">Status do Orçamento</label>
@@ -747,7 +905,7 @@
               <button @click="consultar.expandidos[doc.id] = !consultar.expandidos[doc.id]"
                       class="w-full p-4 text-left flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-neutral-800/50 transition">
                 <div class="flex items-center gap-2.5 flex-wrap">
-                  <span class="px-2 py-0.5 text-xs font-semibold border" :class="corStatusBadge(doc.status)" x-text="labelStatus(doc.tipo_operacao, doc.status)"></span>
+                  <span class="px-2 py-0.5 text-xs font-semibold border rounded" :class="corStatusBadge(doc.status)" x-text="labelStatus(doc.tipo_operacao, doc.status)"></span>
                   <span class="font-bold text-white" x-text="`#${doc.id} — ${doc.cliente_nome}`"></span>
                   <span class="text-xs text-neutral-400" x-text="doc.criado_em"></span>
                 </div>

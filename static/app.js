@@ -176,6 +176,72 @@ window.atelieApp = function () {
       });
     },
 
+    normalizarTexto(txt) {
+      return String(txt || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+    },
+
+    filtrarListaCombo(opcoes, termo) {
+      const b = this.normalizarTexto(termo);
+      if (!b) return opcoes;
+      return opcoes.filter((o) => this.normalizarTexto(o.label).includes(b));
+    },
+
+    opcoesClientes(incluirTodos = false) {
+      const lista = this.clientes.map((c) => ({
+        id: c.id,
+        label: c.nome,
+      }));
+      if (incluirTodos) {
+        return [{ id: "", label: "Todos os clientes" }, ...lista];
+      }
+      return lista;
+    },
+
+    labelClienteSelecionado(id, textoVazio = "Selecione um cliente...") {
+      if (id === "" && textoVazio === "Todos os clientes") return "Todos os clientes";
+      const c = this.clientes.find((x) => Number(x.id) === Number(id));
+      return c ? c.nome : textoVazio;
+    },
+
+    opcoesServicos() {
+      return this.servicos.map((s) => ({
+        id: s.id,
+        label: `${s.nome} (R$ ${this.formatarMoeda(s.valor)}/${UNIDADES_SERVICO[s.tipo_cobranca]})`,
+      }));
+    },
+
+    labelServicoSelecionado(id) {
+      const s = this.servicos.find((x) => Number(x.id) === Number(id));
+      if (!s) return "Selecione um serviço...";
+      return `${s.nome} (R$ ${this.formatarMoeda(s.valor)}/${UNIDADES_SERVICO[s.tipo_cobranca]})`;
+    },
+
+    opcoesMateriaisPorTipo(tipo) {
+      return this.materiais
+        .filter((m) => (m.tipo_material || "outros") === tipo)
+        .map((m) => ({
+          id: m.id,
+          label: `${m.nome} (R$ ${this.formatarMoeda(m.valor)}/${UNIDADES_MATERIAL[m.tipo_medida]})`,
+        }));
+    },
+
+    opcoesTodosMateriais() {
+      return this.materiais.map((m) => ({
+        id: m.id,
+        label: `${m.nome} (R$ ${this.formatarMoeda(m.valor)}/${UNIDADES_MATERIAL[m.tipo_medida]})`,
+      }));
+    },
+
+    labelMaterialSelecionado(id) {
+      const m = this.materiais.find((x) => Number(x.id) === Number(id));
+      if (!m) return "Selecione um material...";
+      return `${m.nome} (R$ ${this.formatarMoeda(m.valor)}/${UNIDADES_MATERIAL[m.tipo_medida]})`;
+    },
+
     formatarQtd(qtd, descricao = "") {
       const n = Number(qtd || 0);
       const qStr = Number.isInteger(n)
