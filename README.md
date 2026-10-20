@@ -134,4 +134,19 @@ manter o banco de dados e o Storage sempre ativos.
    - Clique em **Keep Supabase Alive** no menu lateral esquerdo
    - Clique em **Run workflow → Run workflow** e verifique se a execução fica verde ✅
 
+## Deploy da Nova Plataforma Fluida (FastAPI + SPA na Vercel)
+
+A nova interface universal (Web + Mobile PWA/Android) fica em `api/` e `static/` e pode ser
+hospedada gratuitamente na **Vercel**, conectando no mesmo banco e Storage do Supabase:
+
+1. Acesse [vercel.com](https://vercel.com) e faça login com sua conta do **GitHub**.
+2. Clique em **Add New... → Project** e importe o repositório `atelie-nenem`.
+3. Em **Environment Variables**, adicione as 3 variáveis do seu Supabase:
+   - **`DATABASE_URL`**: a connection string do banco (o mesmo valor de `url` do seu `secrets.toml`)
+   - **`SUPABASE_URL`**: a URL do projeto (o mesmo valor de `storage_url` do seu `secrets.toml`)
+   - **`SUPABASE_KEY`**: a chave `anon` `public` (o mesmo valor de `storage_key` do seu `secrets.toml`)
+4. Clique em **Deploy**. Em menos de 1 minuto o link estará no ar!
+5. **No celular Android**: abra o link da Vercel no Chrome, toque no menu (⋮) e selecione **"Instalar aplicativo"** (ou **"Adicionar à tela inicial"**) para instalar o ícone do Ateliê em tela cheia.
+
+
 

@@ -1,0 +1,14 @@
+[project]
+name = "atelie-gestao"
+version = "2.0.0"
+description = "Sistema de Gestão do Ateliê (FastAPI + SPA Universal)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+    "psycopg2-binary>=2.9.9",
+    "fpdf2>=2.7.8",
+    "Pillow>=10.0.0",
+    "supabase>=2.4.0",
+    "python-multipart>=0.0.9",
+]

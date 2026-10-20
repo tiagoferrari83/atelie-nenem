@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#7c3aed" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Ateliê - Gestão</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+  <script src="/static/app.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    body { -webkit-tap-highlight-color: transparent; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen antialiased" x-data="atelieApp()" x-init="init()">
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <!-- TOAST DE NOTIFICAÇÃO FLUTUANTE -->
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <div x-cloak x-show="toast.visivel" x-transition
+       class="fixed top-4 right-4 z-50 max-w-sm px-4 py-3 rounded-xl shadow-lg border text-sm font-medium flex items-center gap-2"
+       :class="toast.tipo === 'erro' ? 'bg-rose-600 text-white border-rose-700' : 'bg-emerald-600 text-white border-emerald-700'">
+    <span x-text="toast.tipo === 'erro' ? '⚠️' : '✅'"></span>
+    <span x-text="toast.texto"></span>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <!-- TELA DE LOGIN (QUANDO NÃO AUTENTICADO) -->
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <div x-cloak x-show="!token" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-violet-50 via-slate-50 to-rose-50">
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-8">
+      <div class="text-center mb-6">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-violet-100 text-3xl mb-3 shadow-sm">🧵</div>
+        <h1 class="text-2xl font-bold text-slate-900">Ateliê - Gestão</h1>
+        <p class="text-sm text-slate-500 mt-1">Faça login para acessar a plataforma</p>
+      </div>
+
+      <form @submit.prevent="fazerLogin()" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
+          <input type="email" x-model="loginEmail" required placeholder="seu@email.com"
+                 class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Senha</label>
+          <input type="password" x-model="loginSenha" required placeholder="••••••••"
+                 class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition" />
+        </div>
+
+        <div x-show="loginErro" class="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm" x-text="loginErro"></div>
+
+        <button type="submit" :disabled="loginLoading"
+                class="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white font-semibold shadow-md transition">
+          <span x-show="!loginLoading">Entrar</span>
+          <span x-show="loginLoading">Verificando...</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <!-- LAYOUT PRINCIPAL AUTENTICADO -->
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <div x-cloak x-show="token" class="min-h-screen flex flex-col md:flex-row pb-20 md:pb-0">
+
+    <!-- SIDEBAR DESKTOP -->
+    <aside class="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-white border-r border-slate-200 z-30">
+      <div class="p-5 border-b border-slate-100 flex items-center gap-3">
+        <span class="text-2xl">🧵</span>
+        <div>
+          <h1 class="font-bold text-slate-900 leading-tight">Ateliê</h1>
+          <p class="text-xs text-slate-500">Sistema de Gestão</p>
+        </div>
+      </div>
+
+      <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+        <button @click="navegarPara('dashboard')"
+                class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition"
+                :class="page === 'dashboard' ? 'bg-violet-50 text-violet-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'">
+          <span>📆</span> Dashboard
+        </button>
+        <button @click="navegarPara('orcamento')"
+                class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition"
+                :class="page === 'orcamento' ? 'bg-violet-50 text-violet-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'">
+          <span>📝</span> Novo Orçamento
+        </button>
+        <button @click="navegarPara('os')"
+                class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition"
+                :class="page === 'os' ? 'bg-violet-50 text-violet-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'">
+          <span>🧾</span> Nova Ordem de Serviço
+        </button>
+        <button @click="navegarPara('consultar')"
+                class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition"
+                :class="page === 'consultar' ? 'bg-violet-50 text-violet-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'">
+          <span>🔍</span> Consultar
+        </button>
+
+        <div class="pt-3 pb-1 px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Cadastros</div>
+
+        <button @click="navegarPara('clientes')"
+                class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition"
+                :class="page === 'clientes' ? 'bg-violet-50 text-violet-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'">
+          <span>👤</span> Clientes
+        </button>
+        <button @click="navegarPara('servicos')"
+                class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition"
+                :class="page === 'servicos' ? 'bg-violet-50 text-violet-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'">
+          <span>✂️</span> Serviços
+        </button>
+        <button @click="navegarPara('materiais')"
+                class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition"
+                :class="page === 'materiais' ? 'bg-violet-50 text-violet-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'">
+          <span>🧶</span> Matéria-Prima
+        </button>
+        <button @click="navegarPara('prestador')"
+                class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition"
+                :class="page === 'prestador' ? 'bg-violet-50 text-violet-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'">
+          <span>🏢</span> Prestador
+        </button>
+      </nav>
+
+      <div class="p-4 border-t border-slate-200 space-y-2">
+        <div class="text-xs text-slate-500 truncate" x-text="'👤 ' + userEmail"></div>
+        <button @click="fazerLogout()"
+                class="w-full py-2 px-3 rounded-xl border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-xs font-medium transition flex items-center justify-center gap-2">
+          <span>🚪</span> Sair
+        </button>
+      </div>
+    </aside>
+
+    <!-- TOPBAR MOBILE -->
+    <header class="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🧵</span>
+        <span class="font-bold text-slate-900">Ateliê</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button @click="carregarBootstrap()" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100" title="Atualizar">🔄</button>
+        <button @click="menuMobileAberto = !menuMobileAberto" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium">
+          ☰ Cadastros
+        </button>
+      </div>
+    </header>
+
+    <!-- DRAWER MOBILE SECUNDÁRIO -->
+    <div x-show="menuMobileAberto" x-transition class="md:hidden fixed inset-0 z-40 bg-black/40" @click="menuMobileAberto = false">
+      <div class="absolute right-0 top-0 bottom-0 w-64 bg-white shadow-2xl p-4 flex flex-col justify-between" @click.stop>
+        <div class="space-y-1">
+          <div class="font-bold text-slate-800 pb-3 mb-2 border-b">Menu & Cadastros</div>
+          <button @click="navegarPara('clientes')" class="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-100 text-sm font-medium">👤 Clientes</button>
+          <button @click="navegarPara('servicos')" class="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-100 text-sm font-medium">✂️ Serviços</button>
+          <button @click="navegarPara('materiais')" class="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-100 text-sm font-medium">🧶 Matéria-Prima</button>
+          <button @click="navegarPara('prestador')" class="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-100 text-sm font-medium">🏢 Prestador</button>
+        </div>
+        <div class="border-t pt-3 space-y-2">
+          <div class="text-xs text-slate-500 truncate" x-text="userEmail"></div>
+          <button @click="fazerLogout()" class="w-full py-2 rounded-xl bg-rose-50 text-rose-600 text-sm font-medium">🚪 Sair</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="flex-1 md:ml-64 p-4 md:p-8 max-w-4xl w-full mx-auto">
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- 1. TELA: DASHBOARD -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section x-show="page === 'dashboard'" class="space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">📆 Gestão do Ateliê</h2>
+            <p class="text-sm text-slate-500">Resumo de ordens de serviço e entregas</p>
+          </div>
+          <div class="flex gap-2">
+            <button @click="navegarPara('orcamento')" class="px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold shadow-sm transition">
+              ➕ Novo Orçamento
+            </button>
+            <button @click="navegarPara('os')" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold shadow-sm transition">
+              ➕ Nova OS
+            </button>
+          </div>
+        </div>
+
+        <!-- Alerta de OS Reabertas -->
+        <div x-show="dashboard.reabertas && dashboard.reabertas.length > 0"
+             class="p-4 rounded-2xl bg-rose-50 border border-rose-200 space-y-2">
+          <div class="font-bold text-rose-800 text-sm" x-text="`🔴 ${dashboard.reabertas.length} Ordem(ns) de Serviço reaberta(s) — atenção!`"></div>
+          <template x-for="os in dashboard.reabertas" :key="os.id">
+            <button @click="abrirDocumentoNoConsultar(os.id, 'ordem_servico')"
+                    class="w-full text-left p-3 rounded-xl bg-white hover:bg-rose-100/50 border border-rose-200 text-sm font-medium flex justify-between items-center transition">
+              <span x-text="`#${os.id} — ${os.cliente_nome}`"></span>
+              <span class="text-xs text-rose-700" x-text="os.data_entrega ? `Entrega: ${os.data_entrega}` : 'Sem data'"></span>
+            </button>
+          </template>
+        </div>
+
+        <!-- Ordens de Serviço em Aberto -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+          <h3 class="font-bold text-slate-800 flex items-center gap-2">📋 Ordens de Serviço em aberto</h3>
+          <template x-if="!dashboard.abertas || dashboard.abertas.length === 0">
+            <p class="text-sm text-slate-500 py-2">Nenhuma ordem de serviço em aberto no momento.</p>
+          </template>
+          <div class="space-y-2">
+            <template x-for="os in dashboard.abertas" :key="os.id">
+              <button @click="abrirDocumentoNoConsultar(os.id, 'ordem_servico')"
+                      class="w-full text-left p-3.5 rounded-xl border border-slate-200 hover:border-violet-300 hover:bg-violet-50/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="px-2.5 py-0.5 rounded-full text-xs font-medium border" :class="corStatusBadge(os.status)" x-text="labelStatus('ordem_servico', os.status)"></span>
+                  <span class="font-semibold text-slate-800" x-text="`#${os.id} ${os.cliente_nome}`"></span>
+                </div>
+                <span class="text-xs text-slate-500" x-text="os.data_entrega ? `Entrega: ${os.data_entrega}` : 'Sem data definida'"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <!-- Agenda Próximos 7 Dias -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+          <h3 class="font-bold text-slate-800 flex items-center gap-2">🗓️ Próximas entregas (7 dias)</h3>
+          <template x-if="!dashboard.agenda || dashboard.agenda.length === 0">
+            <p class="text-sm text-slate-500 py-2">Nenhuma entrega prevista para os próximos 7 dias.</p>
+          </template>
+          <div class="space-y-2">
+            <template x-for="os in dashboard.agenda" :key="'ag_' + os.id">
+              <button @click="abrirDocumentoNoConsultar(os.id, 'ordem_servico')"
+                      class="w-full text-left p-3.5 rounded-xl border border-slate-200 hover:border-violet-300 transition flex items-center justify-between">
+                <div>
+                  <span class="font-semibold text-slate-800" x-text="`#${os.id} ${os.cliente_nome}`"></span>
+                  <span class="text-xs text-slate-500 ml-2" x-text="os.data_entrega"></span>
+                </div>
+                <span class="text-xs font-bold px-2.5 py-1 rounded-lg bg-violet-100 text-violet-800"
+                      x-text="os.dias_restantes === 0 ? 'Hoje!' : (os.dias_restantes === 1 ? 'Amanhã' : `em ${os.dias_restantes} dias`)"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- 2. TELA: NOVO / EDITAR ORÇAMENTO -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section x-show="page === 'orcamento'" class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900" x-text="orcForm.editandoId ? `✏️ Editar Orçamento #${orcForm.editandoId}` : '📝 Novo Orçamento'"></h2>
+            <p class="text-sm text-slate-500">Adicione tecidos, aviamentos e serviços com cálculo instantâneo</p>
+          </div>
+          <button x-show="orcForm.editandoId" @click="resetarOrcamento()" class="text-xs text-rose-600 hover:underline">Cancelar edição</button>
+        </div>
+
+        <!-- Cliente e Validade -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-sm font-medium text-slate-700">Cliente</label>
+              <button type="button" @click="modal = { tipo: 'rapido_cliente', dados: { nome: '', telefone: '', email: '', endereco: '' } }"
+                      class="text-xs text-violet-600 font-semibold hover:underline">➕ Novo cliente</button>
+            </div>
+            <select x-model="orcForm.cliente_id" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm">
+              <template x-for="c in clientes" :key="c.id">
+                <option :value="c.id" x-text="c.nome"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Validade do orçamento</label>
+            <input type="date" x-model="orcForm.data_validade" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm" />
+          </div>
+        </div>
+
+        <!-- Seções de Materiais: Tecidos, Aviamentos, Outros -->
+        <template x-for="sec in [
+          { id: 'tecidos', titulo: '🧵 Tecidos', tipo: 'tecido', inp: 'inTecido' },
+          { id: 'aviamentos', titulo: '🪡 Aviamentos', tipo: 'aviamento', inp: 'inAviamento' },
+          { id: 'outros', titulo: '📦 Outros materiais', tipo: 'outros', inp: 'inOutros' }
+        ]" :key="sec.id">
+          <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="font-bold text-slate-800" x-text="sec.titulo"></h3>
+              <button type="button" @click="modal = { tipo: 'rapido_material', dados: { nome: '', tipo_material: sec.tipo, tipo_medida: 'metro', valor: '' } }"
+                      class="text-xs font-semibold text-violet-600 hover:underline">➕ Cadastrar material</button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div class="sm:col-span-5">
+                <label class="block text-xs text-slate-500 mb-1">Material</label>
+                <select x-model="orcForm[sec.inp].item_id" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+                  <template x-for="m in materiaisPorTipo(sec.tipo)" :key="m.id">
+                    <option :value="m.id" x-text="`${m.nome} (R$ ${formatarMoeda(m.valor)}/${UNIDADES_MATERIAL[m.tipo_medida]})`"></option>
+                  </template>
+                </select>
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs text-slate-500 mb-1">Qtd.</label>
+                <input type="number" step="0.5" min="0" x-model="orcForm[sec.inp].quantidade" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+              </div>
+              <div class="sm:col-span-3">
+                <label class="block text-xs text-slate-500 mb-1">Observação (opcional)</label>
+                <input type="text" x-model="orcForm[sec.inp].observacao" placeholder="Cor, detalhe..." class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+              </div>
+              <div class="sm:col-span-2">
+                <button type="button" @click="adicionarMaterialOrcamento(sec.id)"
+                        class="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium transition">
+                  Adicionar
+                </button>
+              </div>
+            </div>
+
+            <!-- Lista de itens adicionados na seção -->
+            <div x-show="orcForm[sec.id].length > 0" class="divide-y divide-slate-100 border-t pt-2">
+              <template x-for="(item, idx) in orcForm[sec.id]" :key="idx">
+                <div class="py-2 flex items-center justify-between text-sm">
+                  <div>
+                    <span class="font-semibold text-slate-800" x-text="separarDescricaoUnidade(item.descricao).nome"></span>
+                    <span class="text-slate-600" x-text="` — ${formatarQtd(item.quantidade, item.descricao)} x R$ ${formatarMoeda(item.valor_unitario)} = `"></span>
+                    <span class="font-bold text-slate-900" x-text="`R$ ${formatarMoeda(item.valor_total)}`"></span>
+                    <div x-show="item.observacao_item" class="text-xs text-slate-500 italic" x-text="`📝 ${item.observacao_item}`"></div>
+                  </div>
+                  <button type="button" @click="orcForm[sec.id].splice(idx, 1)" class="text-xs text-rose-600 hover:underline px-2 py-1">Remover</button>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- Seção de Serviços no Orçamento -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-slate-800">✂️ Serviços</h3>
+            <button type="button" @click="modal = { tipo: 'rapido_servico', dados: { nome: '', tipo_cobranca: 'unidade', valor: '' } }"
+                    class="text-xs font-semibold text-violet-600 hover:underline">➕ Novo serviço</button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div class="sm:col-span-5">
+              <label class="block text-xs text-slate-500 mb-1">Serviço</label>
+              <select x-model="orcForm.inServico.item_id" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+                <template x-for="s in servicos" :key="s.id">
+                  <option :value="s.id" x-text="`${s.nome} (R$ ${formatarMoeda(s.valor)}/${UNIDADES_SERVICO[s.tipo_cobranca]})`"></option>
+                </template>
+              </select>
+            </div>
+            <div class="sm:col-span-4">
+              <label class="block text-xs text-slate-500 mb-1">Complexidade</label>
+              <select x-model="orcForm.inServico.complexidade" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+                <option :value="1">1 — Simples (sem acréscimo)</option>
+                <option :value="2">2 — Médio (+10%)</option>
+                <option :value="3">3 — Complexo (+20%)</option>
+              </select>
+            </div>
+            <div class="sm:col-span-3">
+              <label class="block text-xs text-slate-500 mb-1">Quantidade</label>
+              <input type="number" step="0.5" min="0" x-model="orcForm.inServico.quantidade" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+          </div>
+
+          <!-- Preview de preço com complexidade -->
+          <div class="text-xs text-violet-700 font-medium"
+               x-text="`Valor unitário considerado: R$ ${formatarMoeda(precoServicoComComplexidade(orcForm.inServico.item_id, orcForm.inServico.complexidade).final)}/${precoServicoComComplexidade(orcForm.inServico.item_id, orcForm.inServico.complexidade).un}`"></div>
+
+          <!-- Desconto e Observação do Serviço -->
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+            <div class="sm:col-span-3">
+              <label class="block text-xs text-slate-500 mb-1">Desconto</label>
+              <select x-model="orcForm.inServico.tipo_desconto" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+                <option value="nenhum">Sem desconto</option>
+                <option value="percentual">Percentual (%)</option>
+                <option value="valor">Valor (R$)</option>
+              </select>
+            </div>
+            <div class="sm:col-span-2" x-show="orcForm.inServico.tipo_desconto !== 'nenhum'">
+              <label class="block text-xs text-slate-500 mb-1" x-text="orcForm.inServico.tipo_desconto === 'percentual' ? 'Desc. (%)' : 'Desc. (R$)'"></label>
+              <input type="number" step="1" min="0" x-model="orcForm.inServico.valor_desconto" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+            <div class="sm:col-span-3" x-show="orcForm.inServico.tipo_desconto !== 'nenhum'">
+              <label class="block text-xs text-slate-500 mb-1">Motivo do desconto</label>
+              <input type="text" x-model="orcForm.inServico.motivo_desconto" placeholder="Promoção, pacote..." class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+            <div :class="orcForm.inServico.tipo_desconto === 'nenhum' ? 'sm:col-span-7' : 'sm:col-span-2'">
+              <label class="block text-xs text-slate-500 mb-1">Observação (opcional)</label>
+              <input type="text" x-model="orcForm.inServico.observacao" placeholder="Acabamento..." class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+            <div class="sm:col-span-2">
+              <button type="button" @click="adicionarServicoOrcamento()"
+                      class="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium transition">
+                Adicionar
+              </button>
+            </div>
+          </div>
+
+          <!-- Lista de Serviços adicionados no Orçamento -->
+          <div x-show="orcForm.servicos.length > 0" class="divide-y divide-slate-100 border-t pt-2">
+            <template x-for="(srv, idx) in orcForm.servicos" :key="idx">
+              <div class="py-2.5 flex items-center justify-between text-sm">
+                <div>
+                  <span class="font-semibold text-slate-800" x-text="separarDescricaoUnidade(srv.descricao).nome"></span>
+                  <span class="text-slate-600" x-text="` — ${formatarQtd(srv.quantidade, srv.descricao)} x R$ ${formatarMoeda(srv.valor_unitario)} = `"></span>
+                  <span class="font-bold text-slate-900" x-text="`R$ ${formatarMoeda(srv.valor_total)}`"></span>
+                  <div x-show="srv.desconto_calculado > 0" class="text-xs text-emerald-700 font-medium"
+                       x-text="`🏷️ Desconto: -R$ ${formatarMoeda(srv.desconto_calculado)} (${srv.motivo_desconto || 'Desconto'})`"></div>
+                  <div x-show="srv.observacao_item" class="text-xs text-slate-500 italic" x-text="`📝 ${srv.observacao_item}`"></div>
+                </div>
+                <button type="button" @click="orcForm.servicos.splice(idx, 1)" class="text-xs text-rose-600 hover:underline px-2 py-1">Remover</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Descrição Livre e Fotos do Orçamento -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+          <div>
+            <label class="block text-sm font-bold text-slate-800 mb-1">📝 Descrição Livre (opcional)</label>
+            <textarea x-model="orcForm.descricao_livre" rows="3" maxlength="1000"
+                      placeholder="Detalhes adicionais do projeto, referências estéticas..."
+                      class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"></textarea>
+          </div>
+
+          <div class="border-t pt-4 space-y-3">
+            <label class="block text-sm font-bold text-slate-800">📷 Fotos de referência (entram no PDF do Orçamento)</label>
+            <input type="file" multiple accept="image/png,image/jpeg" @change="selecionarNovasFotos($event, orcForm)"
+                   class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100" />
+
+            <!-- Fotos Existentes -->
+            <div x-show="orcForm.fotosExistentes.length > 0" class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <template x-for="(f, idx) in orcForm.fotosExistentes" :key="f.id">
+                <div class="border rounded-xl p-2 space-y-2 bg-slate-50">
+                  <img :src="f.url" class="w-full h-28 object-cover rounded-lg" />
+                  <label class="flex items-center gap-1.5 text-xs text-slate-700">
+                    <input type="checkbox" x-model="f.pagina_inteira" class="rounded text-violet-600" /> Página inteira
+                  </label>
+                  <button type="button" @click="excluirFotoExistente(orcForm, f.id, idx)" class="w-full py-1 text-xs text-rose-600 bg-rose-50 rounded-lg">Excluir</button>
+                </div>
+              </template>
+            </div>
+
+            <!-- Novas Fotos Selecionadas -->
+            <div x-show="orcForm.novasFotos.length > 0" class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <template x-for="(nf, idx) in orcForm.novasFotos" :key="idx">
+                <div class="border border-violet-200 rounded-xl p-2 space-y-2 bg-violet-50/30">
+                  <img :src="nf.preview" class="w-full h-28 object-cover rounded-lg" />
+                  <label class="flex items-center gap-1.5 text-xs text-slate-700">
+                    <input type="checkbox" x-model="nf.pagina_inteira" class="rounded text-violet-600" /> Página inteira
+                  </label>
+                  <button type="button" @click="removerNovaFoto(orcForm, idx)" class="w-full py-1 text-xs text-rose-600 bg-white rounded-lg">Remover</button>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card de Total e Botão Salvar Orçamento -->
+        <div class="bg-violet-900 text-white rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
+          <div class="space-y-0.5">
+            <div x-show="totaisOrcamento.descontos > 0" class="text-xs text-violet-200"
+                 x-text="`Subtotal: R$ ${formatarMoeda(totaisOrcamento.subtotal)} | Descontos: -R$ ${formatarMoeda(totaisOrcamento.descontos)}`"></div>
+            <div class="text-xl font-bold" x-text="`Total Geral: R$ ${formatarMoeda(totaisOrcamento.liquido)}`"></div>
+          </div>
+          <button type="button" @click="salvarOrcamentoEGerarPDF()" :disabled="salvando || !totaisOrcamento.temItens"
+                  class="px-6 py-3 rounded-xl bg-white text-violet-900 hover:bg-violet-50 disabled:opacity-50 font-bold text-sm shadow transition">
+            <span x-show="!salvando" x-text="orcForm.editandoId ? '💾 Salvar Edição e Baixar PDF' : '💾 Salvar Orçamento e Baixar PDF'"></span>
+            <span x-show="salvando">Salvando...</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- 3. TELA: NOVA / EDITAR ORDEM DE SERVIÇO -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section x-show="page === 'os'" class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900" x-text="osForm.editandoId ? `✏️ Editar Ordem de Serviço #${osForm.editandoId}` : '🧾 Nova Ordem de Serviço'"></h2>
+            <p class="text-sm text-slate-500">Serviços aprovados com materiais vinculados e controle de entrega</p>
+          </div>
+          <button x-show="osForm.editandoId || osForm.orcamento_origem_id" @click="resetarOS()" class="text-xs text-rose-600 hover:underline">Limpar formulário</button>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-sm font-medium text-slate-700">Cliente</label>
+              <button type="button" @click="modal = { tipo: 'rapido_cliente', dados: { nome: '', telefone: '', email: '', endereco: '' } }"
+                      class="text-xs text-violet-600 font-semibold hover:underline">➕ Novo cliente</button>
+            </div>
+            <select x-model="osForm.cliente_id" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm">
+              <template x-for="c in clientes" :key="c.id">
+                <option :value="c.id" x-text="c.nome"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Data de entrega prevista</label>
+            <input type="date" x-model="osForm.data_entrega" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm" />
+          </div>
+        </div>
+
+        <!-- Adicionar Serviço na OS -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-slate-800">✂️ Adicionar Serviço</h3>
+            <button type="button" @click="modal = { tipo: 'rapido_servico', dados: { nome: '', tipo_cobranca: 'unidade', valor: '' } }"
+                    class="text-xs font-semibold text-violet-600 hover:underline">➕ Novo serviço</button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div class="sm:col-span-5">
+              <label class="block text-xs text-slate-500 mb-1">Serviço</label>
+              <select x-model="osForm.inServico.item_id" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+                <template x-for="s in servicos" :key="s.id">
+                  <option :value="s.id" x-text="`${s.nome} (R$ ${formatarMoeda(s.valor)}/${UNIDADES_SERVICO[s.tipo_cobranca]})`"></option>
+                </template>
+              </select>
+            </div>
+            <div class="sm:col-span-4">
+              <label class="block text-xs text-slate-500 mb-1">Complexidade</label>
+              <select x-model="osForm.inServico.complexidade" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+                <option :value="1">1 — Simples (sem acréscimo)</option>
+                <option :value="2">2 — Médio (+10%)</option>
+                <option :value="3">3 — Complexo (+20%)</option>
+              </select>
+            </div>
+            <div class="sm:col-span-3">
+              <label class="block text-xs text-slate-500 mb-1">Quantidade</label>
+              <input type="number" step="0.5" min="0" x-model="osForm.inServico.quantidade" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+            <div class="sm:col-span-3">
+              <label class="block text-xs text-slate-500 mb-1">Desconto</label>
+              <select x-model="osForm.inServico.tipo_desconto" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+                <option value="nenhum">Sem desconto</option>
+                <option value="percentual">Percentual (%)</option>
+                <option value="valor">Valor (R$)</option>
+              </select>
+            </div>
+            <div class="sm:col-span-2" x-show="osForm.inServico.tipo_desconto !== 'nenhum'">
+              <label class="block text-xs text-slate-500 mb-1">Valor Desc.</label>
+              <input type="number" step="1" min="0" x-model="osForm.inServico.valor_desconto" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+            <div class="sm:col-span-3" x-show="osForm.inServico.tipo_desconto !== 'nenhum'">
+              <label class="block text-xs text-slate-500 mb-1">Motivo</label>
+              <input type="text" x-model="osForm.inServico.motivo_desconto" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+            <div :class="osForm.inServico.tipo_desconto === 'nenhum' ? 'sm:col-span-7' : 'sm:col-span-2'">
+              <label class="block text-xs text-slate-500 mb-1">Observação (opcional)</label>
+              <input type="text" x-model="osForm.inServico.observacao" placeholder="Detalhe da costura..." class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+            <div class="sm:col-span-2">
+              <button type="button" @click="adicionarServicoOS()"
+                      class="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium transition">
+                Adicionar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grupos de Serviços + Materiais da OS -->
+        <div class="space-y-4">
+          <template x-for="(grupo, idxG) in osForm.grupos" :key="idxG">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+              <div class="flex items-start justify-between">
+                <div>
+                  <span class="font-bold text-slate-900" x-text="separarDescricaoUnidade(grupo.servico.descricao).nome"></span>
+                  <span class="text-sm text-slate-600" x-text="` — ${formatarQtd(grupo.servico.quantidade, grupo.servico.descricao)} x R$ ${formatarMoeda(grupo.servico.valor_unitario)} = R$ ${formatarMoeda(grupo.servico.valor_total)}`"></span>
+                  <div x-show="grupo.servico.desconto_calculado > 0" class="text-xs text-emerald-700 font-medium"
+                       x-text="`🏷️ Desconto: -R$ ${formatarMoeda(grupo.servico.desconto_calculado)} (${grupo.servico.motivo_desconto})`"></div>
+                </div>
+                <button type="button" @click="osForm.grupos.splice(idxG, 1)" class="text-xs text-rose-600 hover:underline">Remover serviço</button>
+              </div>
+
+              <input type="text" x-model="grupo.servico.observacao_item" placeholder="Observação deste serviço (opcional)..."
+                     class="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs" />
+
+              <!-- Materiais do grupo -->
+              <div x-show="grupo.materiais.length > 0" class="pl-3 border-l-2 border-violet-200 space-y-1">
+                <template x-for="(mat, idxM) in grupo.materiais" :key="idxM">
+                  <div class="flex items-center justify-between text-xs text-slate-700 py-1">
+                    <span x-text="`↳ ${separarDescricaoUnidade(mat.descricao).nome} — ${formatarQtd(mat.quantidade, mat.descricao)} x R$ ${formatarMoeda(mat.valor_unitario)} = R$ ${formatarMoeda(mat.valor_total)}`"></span>
+                    <button type="button" @click="grupo.materiais.splice(idxM, 1)" class="text-rose-600 hover:underline">Remover</button>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Adicionar matéria-prima ao serviço -->
+              <div class="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-2 items-end">
+                <div class="flex-1 w-full">
+                  <label class="block text-xs text-slate-400 mb-1">Adicionar matéria-prima a este serviço</label>
+                  <select x-model="grupo.inMatId" class="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs">
+                    <template x-for="m in materiais" :key="m.id">
+                      <option :value="m.id" x-text="`${m.nome} (R$ ${formatarMoeda(m.valor)}/${UNIDADES_MATERIAL[m.tipo_medida]})`"></option>
+                    </template>
+                  </select>
+                </div>
+                <div class="w-full sm:w-24">
+                  <label class="block text-xs text-slate-400 mb-1">Qtd.</label>
+                  <input type="number" step="0.5" min="0" x-model="grupo.inMatQtd" class="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs" />
+                </div>
+                <button type="button" @click="adicionarMaterialNoGrupoOS(idxG)"
+                        class="px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700 hover:bg-violet-100 text-xs font-semibold">
+                  + Material
+                </button>
+              </div>
+
+              <div class="text-right text-xs font-bold text-slate-700 pt-1"
+                   x-text="`Subtotal do serviço: R$ ${formatarMoeda(subtotalGrupoOS(grupo))}`"></div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Observações gerais e Fotos da OS -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+          <div>
+            <label class="block text-sm font-bold text-slate-800 mb-1">Observações gerais (opcional)</label>
+            <textarea x-model="osForm.observacoes" rows="3" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"></textarea>
+          </div>
+          <div class="border-t pt-4 space-y-2">
+            <label class="block text-sm font-bold text-slate-800">📷 Fotos de referência (para consulta)</label>
+            <input type="file" multiple accept="image/png,image/jpeg" @change="selecionarNovasFotos($event, osForm)"
+                   class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700" />
+          </div>
+        </div>
+
+        <!-- Barra de Total e Salvar OS -->
+        <div class="bg-slate-900 text-white rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
+          <div class="space-y-0.5">
+            <div x-show="totaisOS.descontos > 0" class="text-xs text-slate-300"
+                 x-text="`Subtotal: R$ ${formatarMoeda(totaisOS.subtotal)} | Descontos: -R$ ${formatarMoeda(totaisOS.descontos)}`"></div>
+            <div class="text-xl font-bold" x-text="`Total Geral: R$ ${formatarMoeda(totaisOS.liquido)}`"></div>
+          </div>
+          <button type="button" @click="salvarOSEGerarPDF()" :disabled="salvando || osForm.grupos.length === 0"
+                  class="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-bold text-sm shadow transition">
+            <span x-show="!salvando" x-text="osForm.editandoId ? '💾 Salvar Edição e Baixar PDF' : '💾 Salvar OS e Baixar PDF'"></span>
+            <span x-show="salvando">Salvando...</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- 4. TELA: CONSULTAR DOCUMENTOS -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section x-show="page === 'consultar'" class="space-y-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900">🔍 Consultar Documentos</h2>
+            <p class="text-sm text-slate-500">Gerencie status, edite itens, aprove orçamentos e baixe PDFs</p>
+          </div>
+          <button @click="carregarDocumentos()" class="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium hover:bg-slate-50">🔄 Atualizar</button>
+        </div>
+
+        <!-- Abas Orçamento / Ordem de Serviço -->
+        <div class="flex rounded-xl bg-slate-200/70 p-1 w-full sm:w-fit">
+          <button @click="consultar.aba = 'orcamento'"
+                  class="flex-1 sm:flex-initial px-5 py-2 rounded-lg text-sm font-semibold transition"
+                  :class="consultar.aba === 'orcamento' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600'">
+            📝 Orçamentos
+          </button>
+          <button @click="consultar.aba = 'ordem_servico'"
+                  class="flex-1 sm:flex-initial px-5 py-2 rounded-lg text-sm font-semibold transition"
+                  :class="consultar.aba === 'ordem_servico' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600'">
+            🧾 Ordens de Serviço
+          </button>
+        </div>
+
+        <!-- Filtros -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">Filtrar por Cliente</label>
+            <select x-model="consultar.filtroCliente" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+              <option value="">Todos os clientes</option>
+              <template x-for="c in clientes" :key="c.id">
+                <option :value="c.id" x-text="c.nome"></option>
+              </template>
+            </select>
+          </div>
+          <div x-show="consultar.aba === 'orcamento'">
+            <label class="block text-xs text-slate-500 mb-1">Status do Orçamento</label>
+            <select x-model="consultar.filtroStatusOrc" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+              <option value="Todos">Todos</option>
+              <option value="aguardando_aprovacao">Aguardando Aprovação</option>
+              <option value="aprovado">Aprovado</option>
+              <option value="vencido">Vencido</option>
+            </select>
+          </div>
+          <div x-show="consultar.aba === 'ordem_servico'">
+            <label class="block text-xs text-slate-500 mb-1">Status da Ordem de Serviço</label>
+            <select x-model="consultar.filtroStatusOs" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+              <option value="Todos">Todos</option>
+              <option value="nova">Nova</option>
+              <option value="aguardando_aprovacao">Aguardando aprovação</option>
+              <option value="em_atendimento">Em atendimento</option>
+              <option value="entregue">Entregue</option>
+              <option value="reaberta">Reaberta</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Lista de Documentos -->
+        <div class="space-y-3">
+          <template x-for="doc in (consultar.aba === 'orcamento' ? orcamentosFiltrados : ordensFiltradas)" :key="doc.id">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <!-- Cabeçalho do Card -->
+              <button @click="consultar.expandidos[doc.id] = !consultar.expandidos[doc.id]"
+                      class="w-full p-4 text-left flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50 transition">
+                <div class="flex items-center gap-2.5 flex-wrap">
+                  <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold border" :class="corStatusBadge(doc.status)" x-text="labelStatus(doc.tipo_operacao, doc.status)"></span>
+                  <span class="font-bold text-slate-900" x-text="`#${doc.id} — ${doc.cliente_nome}`"></span>
+                  <span class="text-xs text-slate-400" x-text="doc.criado_em"></span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="font-bold text-violet-700 text-sm" x-text="`R$ ${formatarMoeda(doc.total_liquido)}`"></span>
+                  <span class="text-slate-400 text-xs" x-text="consultar.expandidos[doc.id] ? '▲' : '▼'"></span>
+                </div>
+              </button>
+
+              <!-- Corpo Expandido -->
+              <div x-show="consultar.expandidos[doc.id]" class="p-4 border-t border-slate-100 bg-slate-50/50 space-y-4 text-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                  <div>
+                    <label class="block text-xs text-slate-500 mb-1">Alterar Status</label>
+                    <select :value="doc.status" @change="alterarStatusDocumento(doc, $event.target.value)"
+                            class="px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm font-medium">
+                      <template x-if="doc.tipo_operacao === 'orcamento'">
+                        <optgroup label="Status do Orçamento">
+                          <option value="aguardando_aprovacao">Aguardando Aprovação</option>
+                          <option value="aprovado">Aprovado</option>
+                          <option value="vencido">Vencido</option>
+                        </optgroup>
+                      </template>
+                      <template x-if="doc.tipo_operacao === 'ordem_servico'">
+                        <optgroup label="Status da OS">
+                          <option value="nova">Nova</option>
+                          <option value="aguardando_aprovacao">Aguardando aprovação</option>
+                          <option value="em_atendimento">Em atendimento</option>
+                          <option value="entregue">Entregue</option>
+                          <option value="reaberta">Reaberta</option>
+                        </optgroup>
+                      </template>
+                    </select>
+                  </div>
+                  <div class="text-xs text-slate-600 space-y-1">
+                    <div x-show="doc.tipo_operacao === 'orcamento' && doc.data_validade_fmt" x-text="`📅 Válido até: ${doc.data_validade_fmt}`"></div>
+                    <div x-show="doc.tipo_operacao === 'ordem_servico' && doc.data_entrega_fmt" x-text="`📅 Entrega prevista: ${doc.data_entrega_fmt}`"></div>
+                    <div x-show="doc.observacoes" x-text="`📝 Obs: ${doc.observacoes}`"></div>
+                    <div x-show="doc.descricao_livre" x-text="`📝 Descrição: ${doc.descricao_livre}`"></div>
+                  </div>
+                </div>
+
+                <!-- Fotos anexadas -->
+                <div x-show="doc.fotos && doc.fotos.length > 0" class="space-y-2">
+                  <div class="text-xs font-bold text-slate-600">Fotos de referência:</div>
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <template x-for="(f, idxF) in doc.fotos" :key="f.id">
+                      <div class="bg-white p-1.5 rounded-xl border space-y-1">
+                        <a :href="f.url" target="_blank"><img :src="f.url" class="w-full h-24 object-cover rounded-lg" /></a>
+                        <button @click="excluirFotoNoConsultar(doc, f.id, idxF)" class="w-full text-xs text-rose-600 hover:underline">Excluir foto</button>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- Botões de Ação do Documento -->
+                <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
+                  <button x-show="doc.tipo_operacao === 'orcamento'"
+                          @click="aprovarOrcamentoEGerarOS(doc)"
+                          class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition">
+                    ✅ Aprovar e Gerar OS
+                  </button>
+                  <button @click="editarDocumento(doc)"
+                          class="px-3.5 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition">
+                    ✏️ Editar
+                  </button>
+                  <button @click="baixarPDF(doc.id)"
+                          class="px-3.5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold transition">
+                    ⬇️ Baixar PDF
+                  </button>
+                  <button @click="confirmarExclusaoDocumento(doc)"
+                          class="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold transition ml-auto">
+                    🗑️ Excluir
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- 5. TELA: CLIENTES -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section x-show="page === 'clientes'" class="space-y-6">
+        <h2 class="text-2xl font-bold text-slate-900">👤 Clientes</h2>
+
+        <form @submit.prevent="cadastrarCliente(false)" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+          <h3 class="font-bold text-slate-800">Novo Cliente</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <input type="text" x-model="novoCliente.nome" required placeholder="Nome completo *" class="px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+            <input type="text" x-model="novoCliente.telefone" placeholder="Telefone / WhatsApp" class="px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+            <input type="email" x-model="novoCliente.email" placeholder="E-mail" class="px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+          </div>
+          <input type="text" x-model="novoCliente.endereco" placeholder="Endereço" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+          <button type="submit" :disabled="salvando" class="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">Cadastrar Cliente</button>
+        </form>
+
+        <div class="space-y-3">
+          <input type="text" x-model="buscaCliente" placeholder="🔎 Buscar por nome, telefone ou e-mail..."
+                 class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-sm" />
+
+          <template x-for="c in clientesFiltrados" :key="c.id">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div class="font-bold text-slate-900" x-text="c.nome"></div>
+                <div class="text-xs text-slate-500" x-text="`${c.telefone || 'Sem telefone'} • ${c.email || 'Sem e-mail'}`"></div>
+                <div x-show="c.endereco" class="text-xs text-slate-400" x-text="c.endereco"></div>
+              </div>
+              <div class="flex gap-2">
+                <button @click="abrirEdicaoCliente(c)" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium hover:bg-slate-50">✏️ Editar</button>
+                <button @click="abrirExclusaoCliente(c)" class="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-medium hover:bg-rose-100">🗑️ Excluir</button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- 6. TELA: SERVIÇOS -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section x-show="page === 'servicos'" class="space-y-6">
+        <h2 class="text-2xl font-bold text-slate-900">✂️ Serviços</h2>
+
+        <form @submit.prevent="cadastrarServico(false)" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+          <h3 class="font-bold text-slate-800">Novo Serviço</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <input type="text" x-model="novoServico.nome" required placeholder="Nome do serviço *" class="px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+            <select x-model="novoServico.tipo_cobranca" class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+              <option value="unidade">Por unidade</option>
+              <option value="tempo">Por tempo (hora)</option>
+              <option value="metro">Por metro</option>
+            </select>
+            <input type="number" step="0.5" min="0" x-model="novoServico.valor" required placeholder="Valor (R$)" class="px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+          </div>
+          <button type="submit" :disabled="salvando" class="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">Cadastrar Serviço</button>
+        </form>
+
+        <div class="space-y-3">
+          <input type="text" x-model="buscaServico" placeholder="🔎 Buscar serviço..." class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-sm" />
+          <template x-for="s in servicosFiltrados" :key="s.id">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
+              <div>
+                <div class="font-bold text-slate-900" x-text="s.nome"></div>
+                <div class="text-xs text-slate-500" x-text="`R$ ${formatarMoeda(s.valor)} (${LABELS_SERVICO[s.tipo_cobranca]})`"></div>
+              </div>
+              <div class="flex gap-2">
+                <button @click="abrirEdicaoServico(s)" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium">✏️ Editar</button>
+                <button @click="excluirServico(s.id)" class="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-medium">🗑️ Excluir</button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- 7. TELA: MATÉRIA-PRIMA -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section x-show="page === 'materiais'" class="space-y-6">
+        <h2 class="text-2xl font-bold text-slate-900">🧶 Matéria-Prima</h2>
+
+        <form @submit.prevent="cadastrarMaterial(false)" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+          <h3 class="font-bold text-slate-800">Novo Material</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <input type="text" x-model="novoMaterial.nome" required placeholder="Nome do material *" class="px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+            <select x-model="novoMaterial.tipo_material" class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+              <option value="tecido">Tecido</option>
+              <option value="aviamento">Aviamento</option>
+              <option value="outros">Outros</option>
+            </select>
+            <select x-model="novoMaterial.tipo_medida" class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+              <option value="unidade">Por unidade</option>
+              <option value="metro">Por metro</option>
+              <option value="peso">Por peso (kg)</option>
+            </select>
+            <input type="number" step="0.5" min="0" x-model="novoMaterial.valor" required placeholder="Valor (R$)" class="px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+          </div>
+          <button type="submit" :disabled="salvando" class="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">Cadastrar Material</button>
+        </form>
+
+        <input type="text" x-model="buscaMaterial" placeholder="🔎 Buscar material..." class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-sm" />
+
+        <template x-for="grupoTipo in ['tecido', 'aviamento', 'outros']" :key="grupoTipo">
+          <div x-show="materiaisPorTipo(grupoTipo).length > 0" class="space-y-2">
+            <h3 class="font-bold text-slate-700 text-sm uppercase tracking-wider" x-text="LABELS_TIPO_MATERIAL[grupoTipo]"></h3>
+            <template x-for="m in materiaisPorTipo(grupoTipo)" :key="m.id">
+              <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
+                <div>
+                  <div class="font-bold text-slate-900" x-text="m.nome"></div>
+                  <div class="text-xs text-slate-500" x-text="`R$ ${formatarMoeda(m.valor)} (${LABELS_MEDIDA[m.tipo_medida]})`"></div>
+                </div>
+                <div class="flex gap-2">
+                  <button @click="abrirEdicaoMaterial(m)" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium">✏️ Editar</button>
+                  <button @click="excluirMaterial(m.id)" class="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-medium">🗑️ Excluir</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <!-- 8. TELA: PRESTADOR -->
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section x-show="page === 'prestador'" class="space-y-6">
+        <h2 class="text-2xl font-bold text-slate-900">🏢 Prestador de Serviço</h2>
+
+        <form @submit.prevent="salvarPrestador()" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Nome / Razão Social *</label>
+              <input type="text" x-model="prestador.nome" required class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Telefone</label>
+              <input type="text" x-model="prestador.telefone" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">E-mail</label>
+              <input type="email" x-model="prestador.email" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">CNPJ</label>
+              <input type="text" x-model="prestador.cnpj" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm" />
+            </div>
+          </div>
+
+          <div class="border-t pt-4">
+            <label class="block text-sm font-bold text-slate-800 mb-2">Logotipo da empresa (usado no PDF)</label>
+            <div class="flex items-center gap-4">
+              <img x-show="prestador.logo_base64" :src="prestador.logo_base64.startsWith('data:') ? prestador.logo_base64 : `data:image/png;base64,${prestador.logo_base64}`"
+                   class="w-20 h-20 object-contain rounded-xl border p-1 bg-slate-50" />
+              <input type="file" accept="image/png,image/jpeg" @change="aoSelecionarLogoPrestador($event)"
+                     class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700" />
+            </div>
+          </div>
+
+          <div class="border-t pt-4">
+            <label class="block text-sm font-bold text-slate-800 mb-1">Cláusulas do Orçamento (exibidas na última página do PDF)</label>
+            <textarea x-model="prestador.clausulas" rows="6" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"></textarea>
+          </div>
+
+          <button type="submit" :disabled="salvando" class="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">
+            💾 Salvar Dados do Prestador
+          </button>
+        </form>
+      </section>
+
+    </main>
+
+    <!-- BARRA DE NAVEGAÇÃO INFERIOR MOBILE (ESTILO APP ANDROID NATIVO) -->
+    <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-30 grid grid-cols-4 py-1.5">
+      <button @click="navegarPara('dashboard')" class="flex flex-col items-center py-1 text-xs"
+              :class="page === 'dashboard' ? 'text-violet-600 font-bold' : 'text-slate-500'">
+        <span class="text-lg">📆</span>
+        <span>Início</span>
+      </button>
+      <button @click="navegarPara('orcamento')" class="flex flex-col items-center py-1 text-xs"
+              :class="page === 'orcamento' ? 'text-violet-600 font-bold' : 'text-slate-500'">
+        <span class="text-lg">📝</span>
+        <span>Orçamento</span>
+      </button>
+      <button @click="navegarPara('os')" class="flex flex-col items-center py-1 text-xs"
+              :class="page === 'os' ? 'text-violet-600 font-bold' : 'text-slate-500'">
+        <span class="text-lg">🧾</span>
+        <span>Nova OS</span>
+      </button>
+      <button @click="navegarPara('consultar')" class="flex flex-col items-center py-1 text-xs"
+              :class="page === 'consultar' ? 'text-violet-600 font-bold' : 'text-slate-500'">
+        <span class="text-lg">🔍</span>
+        <span>Consultar</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <!-- MODAIS GLOBAIS (EDIÇÃO, CADASTRO RÁPIDO E CONFIRMAÇÃO) -->
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <div x-cloak x-show="modal.tipo !== null" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" @click="modal.tipo = null">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl" @click.stop>
+
+      <!-- Modal: Editar ou Cadastrar Rápido Cliente -->
+      <template x-if="modal.tipo === 'edit_cliente' || modal.tipo === 'rapido_cliente'">
+        <div class="space-y-3">
+          <h3 class="font-bold text-lg text-slate-900" x-text="modal.tipo === 'rapido_cliente' ? '➕ Novo Cliente' : '✏️ Editar Cliente'"></h3>
+          <input type="text" x-model="modal.dados.nome" placeholder="Nome *" class="w-full px-3.5 py-2 rounded-xl border text-sm" />
+          <input type="text" x-model="modal.dados.telefone" placeholder="Telefone" class="w-full px-3.5 py-2 rounded-xl border text-sm" />
+          <input type="email" x-model="modal.dados.email" placeholder="E-mail" class="w-full px-3.5 py-2 rounded-xl border text-sm" />
+          <input type="text" x-model="modal.dados.endereco" placeholder="Endereço" class="w-full px-3.5 py-2 rounded-xl border text-sm" />
+          <div class="flex justify-end gap-2 pt-2">
+            <button @click="modal.tipo = null" class="px-4 py-2 rounded-xl border text-sm">Cancelar</button>
+            <button @click="modal.tipo === 'rapido_cliente' ? cadastrarCliente(true) : salvarEdicaoCliente()"
+                    class="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold">Salvar</button>
+          </div>
+        </div>
+      </template>
+
+      <!-- Modal: Excluir Cliente com Aviso de Vínculos -->
+      <template x-if="modal.tipo === 'del_cliente'">
+        <div class="space-y-3">
+          <h3 class="font-bold text-lg text-rose-700">🗑️ Excluir Cliente</h3>
+          <p class="text-sm text-slate-700" x-text="`Deseja excluir permanentemente ${modal.dados.nome}?`"></p>
+          <div x-show="modal.vinculosCliente && modal.vinculosCliente.length > 0" class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
+            <div class="font-bold" x-text="`⚠️ Atenção: este cliente possui ${modal.vinculosCliente.length} documento(s) vinculado(s) que também serão apagados!`"></div>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button @click="modal.tipo = null" class="px-4 py-2 rounded-xl border text-sm">Cancelar</button>
+            <button @click="confirmarExclusaoCliente()" class="px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold">Sim, excluir</button>
+          </div>
+        </div>
+      </template>
+
+      <!-- Modal: Editar ou Cadastrar Rápido Serviço -->
+      <template x-if="modal.tipo === 'edit_servico' || modal.tipo === 'rapido_servico'">
+        <div class="space-y-3">
+          <h3 class="font-bold text-lg text-slate-900" x-text="modal.tipo === 'rapido_servico' ? '➕ Novo Serviço' : '✏️ Editar Serviço'"></h3>
+          <input type="text" x-model="modal.dados.nome" placeholder="Nome do serviço *" class="w-full px-3.5 py-2 rounded-xl border text-sm" />
+          <select x-model="modal.dados.tipo_cobranca" class="w-full px-3.5 py-2 rounded-xl border bg-white text-sm">
+            <option value="unidade">Por unidade</option>
+            <option value="tempo">Por tempo (hora)</option>
+            <option value="metro">Por metro</option>
+          </select>
+          <input type="number" step="0.5" min="0" x-model="modal.dados.valor" placeholder="Valor (R$)" class="w-full px-3.5 py-2 rounded-xl border text-sm" />
+          <div class="flex justify-end gap-2 pt-2">
+            <button @click="modal.tipo = null" class="px-4 py-2 rounded-xl border text-sm">Cancelar</button>
+            <button @click="modal.tipo === 'rapido_servico' ? cadastrarServico(true) : salvarEdicaoServico()"
+                    class="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold">Salvar</button>
+          </div>
+        </div>
+      </template>
+
+      <!-- Modal: Editar ou Cadastrar Rápido Material -->
+      <template x-if="modal.tipo === 'edit_material' || modal.tipo === 'rapido_material'">
+        <div class="space-y-3">
+          <h3 class="font-bold text-lg text-slate-900" x-text="modal.tipo === 'rapido_material' ? '➕ Novo Material' : '✏️ Editar Material'"></h3>
+          <input type="text" x-model="modal.dados.nome" placeholder="Nome do material *" class="w-full px-3.5 py-2 rounded-xl border text-sm" />
+          <select x-model="modal.dados.tipo_material" class="w-full px-3.5 py-2 rounded-xl border bg-white text-sm">
+            <option value="tecido">Tecido</option>
+            <option value="aviamento">Aviamento</option>
+            <option value="outros">Outros</option>
+          </select>
+          <select x-model="modal.dados.tipo_medida" class="w-full px-3.5 py-2 rounded-xl border bg-white text-sm">
+            <option value="unidade">Por unidade</option>
+            <option value="metro">Por metro</option>
+            <option value="peso">Por peso (kg)</option>
+          </select>
+          <input type="number" step="0.5" min="0" x-model="modal.dados.valor" placeholder="Valor (R$)" class="w-full px-3.5 py-2 rounded-xl border text-sm" />
+          <div class="flex justify-end gap-2 pt-2">
+            <button @click="modal.tipo = null" class="px-4 py-2 rounded-xl border text-sm">Cancelar</button>
+            <button @click="modal.tipo === 'rapido_material' ? cadastrarMaterial(true) : salvarEdicaoMaterial()"
+                    class="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold">Salvar</button>
+          </div>
+        </div>
+      </template>
+
+      <!-- Modal: Confirmar Exclusão de Documento -->
+      <template x-if="modal.tipo === 'del_doc'">
+        <div class="space-y-3">
+          <h3 class="font-bold text-lg text-rose-700">🗑️ Excluir Documento</h3>
+          <p class="text-sm text-slate-700" x-text="`Excluir permanentemente #${modal.dados.id} — ${modal.dados.cliente_nome}? Essa ação não pode ser desfeita.`"></p>
+          <div class="flex justify-end gap-2 pt-2">
+            <button @click="modal.tipo = null" class="px-4 py-2 rounded-xl border text-sm">Cancelar</button>
+            <button @click="executarExclusaoDocumento()" class="px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold">Sim, excluir</button>
+          </div>
+        </div>
+      </template>
+
+    </div>
+  </div>
+
+</body>
+</html>
