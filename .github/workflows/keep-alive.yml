@@ -1,0 +1,29 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # Roda toda segunda e quinta-feira às 12:00 UTC (09:00 no horário de Brasília)
+    - cron: '0 12 * * 1,4'
+  workflow_dispatch: # Permite rodar manualmente pelo botão "Run workflow" no GitHub
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependências mínimas
+        run: pip install supabase psycopg2-binary
+
+      - name: Executar Keep-Alive no Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/keep_alive.py

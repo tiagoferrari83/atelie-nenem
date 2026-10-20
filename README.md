@@ -109,3 +109,23 @@ Streamlit reexecuta o script inteiro a cada clique — sem cache, isso refazia a
 mesmas consultas ao banco a cada interação. Se você cadastrar algo novo e ele não
 aparecer imediatamente numa lista, aguarde alguns segundos ou recarregue a página.
 
+## Manter o Supabase sempre ativo (Keep-Alive gratuito)
+
+No plano gratuito, o Supabase pausa projetos após 7 dias sem atividade. Este repositório
+inclui uma automação do **GitHub Actions** (`.github/workflows/keep-alive.yml`) que roda
+automaticamente toda **segunda e quinta-feira às 09:00 (horário de Brasília)** para
+manter o banco de dados e o Storage sempre ativos.
+
+### Como ativar no GitHub (uma única vez):
+
+1. No seu repositório do GitHub, acesse **Settings → Secrets and variables → Actions**.
+2. Na aba **Secrets**, clique em **New repository secret** e cadastre:
+   - **`SUPABASE_URL`**: a URL do projeto (o mesmo valor de `storage_url` do seu `secrets.toml`, ex.: `https://xxxx.supabase.co`)
+   - **`SUPABASE_KEY`**: a chave `anon` `public` (o mesmo valor de `storage_key` do seu `secrets.toml`)
+   - **`DATABASE_URL`** *(opcional)*: a connection string do banco (o mesmo valor de `url` do seu `secrets.toml`)
+3. Para testar na hora:
+   - Vá na aba **Actions** do repositório no GitHub
+   - Clique em **Keep Supabase Alive** no menu lateral esquerdo
+   - Clique em **Run workflow → Run workflow** e verifique se a execução fica verde ✅
+
+
