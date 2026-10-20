@@ -4,12 +4,24 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import streamlit as st
 from database import init_db
+from auth import usuario_esta_logado, tela_login, fazer_logout
 
 st.set_page_config(
     page_title="Ateliê - Gestão",
     page_icon="🧵",
     layout="centered",
 )
+
+# Bloqueia o acesso caso o usuário não esteja autenticado no Supabase Auth.
+# Usamos st.navigation com position="hidden" mesmo na tela de login para garantir
+# que o Streamlit oculte a pasta pages/ e bloqueie o acesso direto por URL.
+if not usuario_esta_logado():
+    pg_login = st.navigation(
+        [st.Page(tela_login, title="Login", icon="🔒", default=True)],
+        position="hidden",
+    )
+    pg_login.run()
+    st.stop()
 
 # Cria/atualiza as tabelas no banco - roda só uma vez (cacheado), não a cada clique
 @st.cache_resource(show_spinner=False)
@@ -56,5 +68,12 @@ with st.sidebar:
     st.page_link(pagina_materia_prima, label="Matéria-Prima", icon="🧵")
     st.page_link(pagina_novo, label="Novo", icon="📄")
     st.page_link(pagina_consultar, label="Consultar", icon="🔍")
+
+    st.divider()
+    if st.session_state.get("usuario_email"):
+        st.caption(f"👤 {st.session_state['usuario_email']}")
+    if st.button("🚪 Sair", width="stretch"):
+        fazer_logout()
+        st.rerun()
 
 pg.run()

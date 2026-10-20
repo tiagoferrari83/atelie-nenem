@@ -25,7 +25,13 @@ clientes, serviços e matéria-prima, além de geração de orçamentos e ordens
    - Marque como **Public bucket** (para as fotos abrirem direto pela URL)
    - Salvar
 
-4. Rode o app:
+4. **Cadastre o(s) usuário(s) de login no Supabase Auth**:
+   - No painel do Supabase, vá em **Authentication** → **Users**
+   - Clique em **Add user** → **Create new user**
+   - Informe o **Email**, a **Password** e deixe marcada a opção **Auto Confirm User**
+   - Clique em **Create user**
+
+5. Rode o app:
    ```
    streamlit run app.py
    ```
