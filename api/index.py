@@ -15,6 +15,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from fastapi import FastAPI, Depends, HTTPException, Header, Query, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -33,7 +34,14 @@ from api.backend_db import (
 )
 from pdf_generator import gerar_pdf_os, gerar_pdf_orcamento
 
-app = FastAPI(title="Ateliê - Plataforma Universal", version="2.0.0")
+app = FastAPI(title="Ateliê - Plataforma Universal", version="2.0.0", redirect_slashes=False)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 STATIC_DIR = ROOT_DIR / "static"
 
@@ -914,6 +922,11 @@ def serve_manifest():
 @app.get("/icon.svg")
 def serve_icon():
     return FileResponse(STATIC_DIR / "icon.svg", media_type="image/svg+xml")
+
+
+@app.get("/static/app.js")
+def serve_app_js():
+    return FileResponse(STATIC_DIR / "app.js", media_type="application/javascript")
 
 
 if STATIC_DIR.exists():
