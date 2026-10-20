@@ -208,7 +208,7 @@ window.atelieApp = function () {
 
     corStatusBadge(status) {
       const map = {
-        nova: "bg-blue-950/80 text-blue-300 border-blue-800",
+        nova: "bg-neutral-800 text-neutral-200 border-neutral-700",
         aguardando_aprovacao: "bg-amber-950/80 text-amber-300 border-amber-800",
         em_atendimento: "bg-orange-950/80 text-orange-300 border-orange-800",
         entregue: "bg-emerald-950/80 text-emerald-300 border-emerald-800",
@@ -216,7 +216,7 @@ window.atelieApp = function () {
         reaberta: "bg-rose-950/80 text-rose-300 border-rose-800",
         vencido: "bg-rose-950/80 text-rose-300 border-rose-800",
       };
-      return map[status] || "bg-slate-800 text-slate-300 border-slate-700";
+      return map[status] || "bg-neutral-800 text-neutral-300 border-neutral-700";
     },
 
     async apiFetch(url, options = {}) {
