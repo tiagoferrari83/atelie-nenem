@@ -751,6 +751,62 @@
                   </div>
                 </div>
 
+                <!-- Lista detalhada de Itens do Documento -->
+                <div class="bg-white rounded-xl border border-slate-200 p-3.5 space-y-2">
+                  <div class="text-xs font-bold text-slate-700 uppercase tracking-wider">Itens</div>
+
+                  <!-- Itens de Orçamento (Tecidos, Aviamentos, Outros, Serviços) -->
+                  <template x-if="doc.tipo_operacao === 'orcamento'">
+                    <div class="space-y-1.5 text-xs">
+                      <template x-for="sec in ['tecidos', 'aviamentos', 'outros']" :key="sec">
+                        <template x-for="(m, idxM) in (doc.secoes[sec] || [])" :key="sec + '_' + idxM">
+                          <div class="text-slate-700">
+                            <span class="font-medium" x-text="separarDescricaoUnidade(m.descricao).nome"></span>
+                            <span x-text="` — ${formatarQtd(m.quantidade, m.descricao)} x R$ ${formatarMoeda(m.valor_unitario)} = R$ ${formatarMoeda(m.valor_total)}`"></span>
+                            <div x-show="m.observacao_item" class="text-slate-500 italic pl-3" x-text="`📝 ${m.observacao_item}`"></div>
+                          </div>
+                        </template>
+                      </template>
+                      <template x-for="(s, idxS) in (doc.secoes.servicos || [])" :key="'srv_' + idxS">
+                        <div class="text-slate-800 pt-1">
+                          <span class="font-bold" x-text="separarDescricaoUnidade(s.descricao).nome"></span>
+                          <span x-text="` — ${formatarQtd(s.quantidade, s.descricao)} x R$ ${formatarMoeda(s.valor_unitario)} = R$ ${formatarMoeda(s.valor_total)}`"></span>
+                          <div x-show="s.desconto_calculado > 0" class="text-emerald-700 font-medium pl-3"
+                               x-text="`🏷️ Desconto: -R$ ${formatarMoeda(s.desconto_calculado)} (${s.motivo_desconto || 'Desconto'})`"></div>
+                          <div x-show="s.observacao_item" class="text-slate-500 italic pl-3" x-text="`📝 ${s.observacao_item}`"></div>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+
+                  <!-- Itens de Ordem de Serviço (Grupos de Serviço + Materiais) -->
+                  <template x-if="doc.tipo_operacao === 'ordem_servico'">
+                    <div class="space-y-2 text-xs">
+                      <template x-for="(g, idxG) in (doc.grupos || [])" :key="idxG">
+                        <div class="border-b border-slate-100 last:border-0 pb-2 last:pb-0 space-y-1">
+                          <div>
+                            <span class="font-bold text-slate-900" x-text="separarDescricaoUnidade(g.servico.descricao).nome"></span>
+                            <span x-text="` — ${formatarQtd(g.servico.quantidade, g.servico.descricao)} x R$ ${formatarMoeda(g.servico.valor_unitario)} = R$ ${formatarMoeda(g.servico.valor_total)}`"></span>
+                          </div>
+                          <div x-show="g.servico.desconto_calculado > 0" class="text-emerald-700 font-medium pl-3"
+                               x-text="`🏷️ Desconto: -R$ ${formatarMoeda(g.servico.desconto_calculado)} (${g.servico.motivo_desconto || 'Desconto'})`"></div>
+                          <div x-show="g.servico.observacao_item" class="text-slate-500 italic pl-3" x-text="`📝 ${g.servico.observacao_item}`"></div>
+                          <template x-for="(m, idxM) in (g.materiais || [])" :key="idxM">
+                            <div class="pl-4 text-slate-600"
+                                 x-text="`↳ ${separarDescricaoUnidade(m.descricao).nome}: ${formatarQtd(m.quantidade, m.descricao)} x R$ ${formatarMoeda(m.valor_unitario)} = R$ ${formatarMoeda(m.valor_total)}`"></div>
+                          </template>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+
+                  <div class="pt-2 border-t border-slate-100 text-xs space-y-0.5">
+                    <div x-show="doc.total_desconto > 0" class="text-slate-600" x-text="`Subtotal dos itens: R$ ${formatarMoeda(doc.subtotal_bruto)}`"></div>
+                    <div x-show="doc.total_desconto > 0" class="text-emerald-700" x-text="`Subtotal dos descontos: -R$ ${formatarMoeda(doc.total_desconto)}`"></div>
+                    <div class="font-bold text-slate-900 text-sm" x-text="`Total: R$ ${formatarMoeda(doc.total_liquido)}`"></div>
+                  </div>
+                </div>
+
                 <!-- Fotos anexadas -->
                 <div x-show="doc.fotos && doc.fotos.length > 0" class="space-y-2">
                   <div class="text-xs font-bold text-slate-600">Fotos de referência:</div>
@@ -766,11 +822,6 @@
 
                 <!-- Botões de Ação do Documento -->
                 <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
-                  <button x-show="doc.tipo_operacao === 'orcamento'"
-                          @click="aprovarOrcamentoEGerarOS(doc)"
-                          class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition">
-                    ✅ Aprovar e Gerar OS
-                  </button>
                   <button @click="editarDocumento(doc)"
                           class="px-3.5 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition">
                     ✏️ Editar
