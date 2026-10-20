@@ -32,6 +32,21 @@
     button {
       border-radius: 6px !important;
     }
+    input[type="file"]::file-selector-button {
+      border-radius: 6px !important;
+      background-color: #7c3aed !important;
+      color: #ffffff !important;
+      border: 0 !important;
+      padding: 0.5rem 0.875rem !important;
+      margin-right: 0.875rem !important;
+      font-size: 0.875rem !important;
+      font-weight: 500 !important;
+      cursor: pointer !important;
+      transition: background-color 0.15s ease-in-out !important;
+    }
+    input[type="file"]::file-selector-button:hover {
+      background-color: #8b5cf6 !important;
+    }
     input:not([type="checkbox"]):not([type="file"]),
     select,
     textarea,
@@ -457,11 +472,25 @@
             </div>
             <div class="sm:col-span-4">
               <label class="block text-xs text-neutral-400 mb-1">Complexidade</label>
-              <select x-model="orcForm.inServico.complexidade" class="w-full px-3 py-2 border text-sm">
-                <option :value="1">1 — Simples (sem acréscimo)</option>
-                <option :value="2">2 — Médio (+10%)</option>
-                <option :value="3">3 — Complexo (+20%)</option>
-              </select>
+              <!-- Combobox Complexidade Orçamento -->
+              <div class="relative" x-data="{ aberto: false }" @click.outside="aberto = false">
+                <button type="button" @click="aberto = !aberto"
+                        class="combo-trigger w-full px-3 py-2 border text-sm text-left flex items-center justify-between">
+                  <span class="truncate" x-text="labelComplexidadeSelecionada(orcForm.inServico.complexidade)"></span>
+                  <span class="text-neutral-400 text-xs ml-2">▾</span>
+                </button>
+                <div x-show="aberto"
+                     class="absolute left-0 right-0 top-full mt-1 bg-[#181818] border border-neutral-700 rounded shadow-2xl z-40 divide-y divide-neutral-800/70">
+                  <template x-for="op in opcoesComplexidade()" :key="op.id">
+                    <button type="button"
+                            @click="orcForm.inServico.complexidade = op.id; aberto = false"
+                            class="w-full text-left px-3 py-2.5 text-sm hover:bg-violet-600/25 transition"
+                            :class="Number(orcForm.inServico.complexidade) === Number(op.id) ? 'bg-violet-600/20 text-violet-300 font-semibold' : 'text-neutral-200'">
+                      <span x-text="op.label"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
             </div>
             <div class="sm:col-span-3">
               <label class="block text-xs text-neutral-400 mb-1">Quantidade</label>
@@ -470,18 +499,32 @@
           </div>
 
           <!-- Preview de preço com complexidade -->
-          <div class="text-xs text-violet-300 font-medium"
+          <div x-show="orcForm.inServico.item_id" class="text-xs text-violet-300 font-medium"
                x-text="`Valor unitário considerado: R$ ${formatarMoeda(precoServicoComComplexidade(orcForm.inServico.item_id, orcForm.inServico.complexidade).final)}/${precoServicoComComplexidade(orcForm.inServico.item_id, orcForm.inServico.complexidade).un}`"></div>
 
           <!-- Desconto e Observação do Serviço -->
           <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
             <div class="sm:col-span-3">
               <label class="block text-xs text-neutral-400 mb-1">Desconto</label>
-              <select x-model="orcForm.inServico.tipo_desconto" class="w-full px-3 py-2 border text-sm">
-                <option value="nenhum">Sem desconto</option>
-                <option value="percentual">Percentual (%)</option>
-                <option value="valor">Valor (R$)</option>
-              </select>
+              <!-- Combobox Desconto Orçamento -->
+              <div class="relative" x-data="{ aberto: false }" @click.outside="aberto = false">
+                <button type="button" @click="aberto = !aberto"
+                        class="combo-trigger w-full px-3 py-2 border text-sm text-left flex items-center justify-between">
+                  <span class="truncate" x-text="labelDescontoSelecionado(orcForm.inServico.tipo_desconto)"></span>
+                  <span class="text-neutral-400 text-xs ml-2">▾</span>
+                </button>
+                <div x-show="aberto"
+                     class="absolute left-0 right-0 top-full mt-1 bg-[#181818] border border-neutral-700 rounded shadow-2xl z-40 divide-y divide-neutral-800/70">
+                  <template x-for="op in opcoesDesconto()" :key="op.id">
+                    <button type="button"
+                            @click="orcForm.inServico.tipo_desconto = op.id; aberto = false"
+                            class="w-full text-left px-3 py-2.5 text-sm hover:bg-violet-600/25 transition"
+                            :class="String(orcForm.inServico.tipo_desconto) === String(op.id) ? 'bg-violet-600/20 text-violet-300 font-semibold' : 'text-neutral-200'">
+                      <span x-text="op.label"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
             </div>
             <div class="sm:col-span-2" x-show="orcForm.inServico.tipo_desconto !== 'nenhum'">
               <label class="block text-xs text-neutral-400 mb-1" x-text="orcForm.inServico.tipo_desconto === 'percentual' ? 'Desc. (%)' : 'Desc. (R$)'"></label>
@@ -533,7 +576,7 @@
           <div class="border-t border-neutral-800 pt-4 space-y-3">
             <label class="block text-sm font-bold text-white">📷 Fotos de referência (entram no PDF do Orçamento)</label>
             <input type="file" multiple accept="image/png,image/jpeg" @change="selecionarNovasFotos($event, orcForm)"
-                   class="block w-full text-sm text-neutral-400 file:mr-4 file:py-2 file:px-4 file:border-0 file:text-sm file:font-semibold file:bg-violet-950 file:text-violet-300 hover:file:bg-violet-900" />
+                   class="block w-full text-sm text-neutral-400 file:mr-3.5 file:py-2 file:px-4 file:border-0 file:text-sm file:font-medium file:bg-violet-600 file:text-white hover:file:bg-violet-500 file:cursor-pointer file:transition" />
 
             <!-- Fotos Existentes -->
             <div x-show="orcForm.fotosExistentes.length > 0" class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
@@ -675,11 +718,25 @@
             </div>
             <div class="sm:col-span-4">
               <label class="block text-xs text-neutral-400 mb-1">Complexidade</label>
-              <select x-model="osForm.inServico.complexidade" class="w-full px-3 py-2 border text-sm">
-                <option :value="1">1 — Simples (sem acréscimo)</option>
-                <option :value="2">2 — Médio (+10%)</option>
-                <option :value="3">3 — Complexo (+20%)</option>
-              </select>
+              <!-- Combobox Complexidade OS -->
+              <div class="relative" x-data="{ aberto: false }" @click.outside="aberto = false">
+                <button type="button" @click="aberto = !aberto"
+                        class="combo-trigger w-full px-3 py-2 border text-sm text-left flex items-center justify-between">
+                  <span class="truncate" x-text="labelComplexidadeSelecionada(osForm.inServico.complexidade)"></span>
+                  <span class="text-neutral-400 text-xs ml-2">▾</span>
+                </button>
+                <div x-show="aberto"
+                     class="absolute left-0 right-0 top-full mt-1 bg-[#181818] border border-neutral-700 rounded shadow-2xl z-40 divide-y divide-neutral-800/70">
+                  <template x-for="op in opcoesComplexidade()" :key="op.id">
+                    <button type="button"
+                            @click="osForm.inServico.complexidade = op.id; aberto = false"
+                            class="w-full text-left px-3 py-2.5 text-sm hover:bg-violet-600/25 transition"
+                            :class="Number(osForm.inServico.complexidade) === Number(op.id) ? 'bg-violet-600/20 text-violet-300 font-semibold' : 'text-neutral-200'">
+                      <span x-text="op.label"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
             </div>
             <div class="sm:col-span-3">
               <label class="block text-xs text-neutral-400 mb-1">Quantidade</label>
@@ -687,14 +744,32 @@
             </div>
           </div>
 
+          <!-- Preview de preço com complexidade -->
+          <div x-show="osForm.inServico.item_id" class="text-xs text-violet-300 font-medium"
+               x-text="`Valor unitário considerado: R$ ${formatarMoeda(precoServicoComComplexidade(osForm.inServico.item_id, osForm.inServico.complexidade).final)}/${precoServicoComComplexidade(osForm.inServico.item_id, osForm.inServico.complexidade).un}`"></div>
+
           <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
             <div class="sm:col-span-3">
               <label class="block text-xs text-neutral-400 mb-1">Desconto</label>
-              <select x-model="osForm.inServico.tipo_desconto" class="w-full px-3 py-2 border text-sm">
-                <option value="nenhum">Sem desconto</option>
-                <option value="percentual">Percentual (%)</option>
-                <option value="valor">Valor (R$)</option>
-              </select>
+              <!-- Combobox Desconto OS -->
+              <div class="relative" x-data="{ aberto: false }" @click.outside="aberto = false">
+                <button type="button" @click="aberto = !aberto"
+                        class="combo-trigger w-full px-3 py-2 border text-sm text-left flex items-center justify-between">
+                  <span class="truncate" x-text="labelDescontoSelecionado(osForm.inServico.tipo_desconto)"></span>
+                  <span class="text-neutral-400 text-xs ml-2">▾</span>
+                </button>
+                <div x-show="aberto"
+                     class="absolute left-0 right-0 top-full mt-1 bg-[#181818] border border-neutral-700 rounded shadow-2xl z-40 divide-y divide-neutral-800/70">
+                  <template x-for="op in opcoesDesconto()" :key="op.id">
+                    <button type="button"
+                            @click="osForm.inServico.tipo_desconto = op.id; aberto = false"
+                            class="w-full text-left px-3 py-2.5 text-sm hover:bg-violet-600/25 transition"
+                            :class="String(osForm.inServico.tipo_desconto) === String(op.id) ? 'bg-violet-600/20 text-violet-300 font-semibold' : 'text-neutral-200'">
+                      <span x-text="op.label"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
             </div>
             <div class="sm:col-span-2" x-show="osForm.inServico.tipo_desconto !== 'nenhum'">
               <label class="block text-xs text-neutral-400 mb-1">Valor Desc.</label>
@@ -798,10 +873,30 @@
             <label class="block text-sm font-bold text-white mb-1">Observações gerais (opcional)</label>
             <textarea x-model="osForm.observacoes" rows="3" class="w-full px-3.5 py-2.5 border text-sm"></textarea>
           </div>
-          <div class="border-t border-neutral-800 pt-4 space-y-2">
+          <div class="border-t border-neutral-800 pt-4 space-y-3">
             <label class="block text-sm font-bold text-white">📷 Fotos de referência (para consulta)</label>
             <input type="file" multiple accept="image/png,image/jpeg" @change="selecionarNovasFotos($event, osForm)"
-                   class="block w-full text-sm text-neutral-400 file:mr-4 file:py-2 file:px-4 file:border-0 file:text-sm file:font-semibold file:bg-violet-950 file:text-violet-300" />
+                   class="block w-full text-sm text-neutral-400 file:mr-3.5 file:py-2 file:px-4 file:border-0 file:text-sm file:font-medium file:bg-violet-600 file:text-white hover:file:bg-violet-500 file:cursor-pointer file:transition" />
+
+            <!-- Fotos Existentes na OS -->
+            <div x-show="osForm.fotosExistentes.length > 0" class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <template x-for="(f, idx) in osForm.fotosExistentes" :key="f.id">
+                <div class="border border-neutral-800 rounded p-2 space-y-2 bg-[#111111]">
+                  <img :src="f.url" class="w-full h-28 object-cover rounded" />
+                  <button type="button" @click="excluirFotoExistente(osForm, f.id, idx)" class="w-full py-1 text-xs text-rose-400 bg-rose-950/50">Excluir</button>
+                </div>
+              </template>
+            </div>
+
+            <!-- Novas Fotos Selecionadas na OS -->
+            <div x-show="osForm.novasFotos.length > 0" class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <template x-for="(nf, idx) in osForm.novasFotos" :key="idx">
+                <div class="border border-violet-800/60 rounded p-2 space-y-2 bg-violet-950/20">
+                  <img :src="nf.preview" class="w-full h-28 object-cover rounded" />
+                  <button type="button" @click="removerNovaFoto(osForm, idx)" class="w-full py-1 text-xs text-rose-400 bg-[#161616]">Remover</button>
+                </div>
+              </template>
+            </div>
           </div>
         </div>
 
@@ -1190,7 +1285,7 @@
               <img x-show="prestador.logo_base64" :src="prestador.logo_base64 && prestador.logo_base64.startsWith('data:') ? prestador.logo_base64 : `data:image/png;base64,${prestador.logo_base64}`"
                    class="w-20 h-20 object-contain rounded border border-neutral-700 p-1 bg-[#111111]" />
               <input type="file" accept="image/png,image/jpeg" @change="aoSelecionarLogoPrestador($event)"
-                     class="text-sm text-neutral-400 file:mr-4 file:py-2 file:px-4 file:border-0 file:text-sm file:font-semibold file:bg-violet-950 file:text-violet-300" />
+                     class="text-sm text-neutral-400 file:mr-3.5 file:py-2 file:px-4 file:border-0 file:text-sm file:font-medium file:bg-violet-600 file:text-white hover:file:bg-violet-500 file:cursor-pointer file:transition" />
             </div>
           </div>
 

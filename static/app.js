@@ -201,8 +201,8 @@ window.atelieApp = function () {
       return lista;
     },
 
-    labelClienteSelecionado(id, textoVazio = "Selecione um cliente...") {
-      if (id === "" && textoVazio === "Todos os clientes") return "Todos os clientes";
+    labelClienteSelecionado(id, textoVazio = "-") {
+      if (id === "" || id === null || id === undefined) return textoVazio;
       const c = this.clientes.find((x) => Number(x.id) === Number(id));
       return c ? c.nome : textoVazio;
     },
@@ -215,8 +215,9 @@ window.atelieApp = function () {
     },
 
     labelServicoSelecionado(id) {
+      if (id === "" || id === null || id === undefined) return "-";
       const s = this.servicos.find((x) => Number(x.id) === Number(id));
-      if (!s) return "Selecione um serviço...";
+      if (!s) return "-";
       return `${s.nome} (R$ ${this.formatarMoeda(s.valor)}/${UNIDADES_SERVICO[s.tipo_cobranca]})`;
     },
 
@@ -237,9 +238,40 @@ window.atelieApp = function () {
     },
 
     labelMaterialSelecionado(id) {
+      if (id === "" || id === null || id === undefined) return "-";
       const m = this.materiais.find((x) => Number(x.id) === Number(id));
-      if (!m) return "Selecione um material...";
+      if (!m) return "-";
       return `${m.nome} (R$ ${this.formatarMoeda(m.valor)}/${UNIDADES_MATERIAL[m.tipo_medida]})`;
+    },
+
+    opcoesComplexidade() {
+      return [
+        { id: 1, label: "1 — Simples (sem acréscimo)" },
+        { id: 2, label: "2 — Médio (+10%)" },
+        { id: 3, label: "3 — Complexo (+20%)" },
+      ];
+    },
+
+    labelComplexidadeSelecionada(id) {
+      const op = this.opcoesComplexidade().find(
+        (x) => Number(x.id) === Number(id)
+      );
+      return op ? op.label : "1 — Simples (sem acréscimo)";
+    },
+
+    opcoesDesconto() {
+      return [
+        { id: "nenhum", label: "Sem desconto" },
+        { id: "percentual", label: "Percentual (%)" },
+        { id: "valor", label: "Valor (R$)" },
+      ];
+    },
+
+    labelDescontoSelecionado(id) {
+      const op = this.opcoesDesconto().find(
+        (x) => String(x.id) === String(id)
+      );
+      return op ? op.label : "Sem desconto";
     },
 
     formatarQtd(qtd, descricao = "") {
@@ -374,27 +406,7 @@ window.atelieApp = function () {
     },
 
     sincronizarDefaultsFormularios() {
-      if (this.clientes.length > 0) {
-        if (!this.orcForm.cliente_id)
-          this.orcForm.cliente_id = this.clientes[0].id;
-        if (!this.osForm.cliente_id)
-          this.osForm.cliente_id = this.clientes[0].id;
-      }
-      if (this.servicos.length > 0) {
-        if (!this.orcForm.inServico.item_id)
-          this.orcForm.inServico.item_id = this.servicos[0].id;
-        if (!this.osForm.inServico.item_id)
-          this.osForm.inServico.item_id = this.servicos[0].id;
-      }
-      const tecidos = this.materiaisPorTipo("tecido");
-      const aviamentos = this.materiaisPorTipo("aviamento");
-      const outros = this.materiaisPorTipo("outros");
-      if (tecidos.length > 0 && !this.orcForm.inTecido.item_id)
-        this.orcForm.inTecido.item_id = tecidos[0].id;
-      if (aviamentos.length > 0 && !this.orcForm.inAviamento.item_id)
-        this.orcForm.inAviamento.item_id = aviamentos[0].id;
-      if (outros.length > 0 && !this.orcForm.inOutros.item_id)
-        this.orcForm.inOutros.item_id = outros[0].id;
+      // Campos de Clientes, Materiais e Serviços permanecem vazios ("-") até o usuário selecionar.
     },
 
     async navegarPara(destino, opcoes = {}) {
@@ -750,6 +762,7 @@ window.atelieApp = function () {
         valor_total: vt,
         observacao_item: (inp.observacao || "").trim(),
       });
+      inp.item_id = "";
       inp.quantidade = 1;
       inp.observacao = "";
     },
@@ -801,6 +814,8 @@ window.atelieApp = function () {
       const srv = this._montarObjetoServico(this.orcForm.inServico);
       if (!srv) return;
       this.orcForm.servicos.push(srv);
+      this.orcForm.inServico.item_id = "";
+      this.orcForm.inServico.complexidade = 1;
       this.orcForm.inServico.quantidade = 1;
       this.orcForm.inServico.tipo_desconto = "nenhum";
       this.orcForm.inServico.valor_desconto = 0;
@@ -836,14 +851,14 @@ window.atelieApp = function () {
     adicionarServicoOS() {
       const srv = this._montarObjetoServico(this.osForm.inServico);
       if (!srv) return;
-      const matDefault =
-        this.materiais.length > 0 ? this.materiais[0].id : "";
       this.osForm.grupos.push({
         servico: srv,
         materiais: [],
-        inMatId: matDefault,
+        inMatId: "",
         inMatQtd: 1,
       });
+      this.osForm.inServico.item_id = "";
+      this.osForm.inServico.complexidade = 1;
       this.osForm.inServico.quantidade = 1;
       this.osForm.inServico.tipo_desconto = "nenhum";
       this.osForm.inServico.valor_desconto = 0;
@@ -872,6 +887,7 @@ window.atelieApp = function () {
         valor_unitario: vu,
         valor_total: Math.round(vu * qtd * 100) / 100,
       });
+      g.inMatId = "";
       g.inMatQtd = 1;
     },
 
@@ -931,8 +947,7 @@ window.atelieApp = function () {
 
     resetarOrcamento() {
       this.orcForm.editandoId = null;
-      this.orcForm.cliente_id =
-        this.clientes.length > 0 ? this.clientes[0].id : "";
+      this.orcForm.cliente_id = "";
       this.orcForm.data_validade = dataFuturaISO(7);
       this.orcForm.descricao_livre = "";
       this.orcForm.tecidos = [];
@@ -941,20 +956,38 @@ window.atelieApp = function () {
       this.orcForm.servicos = [];
       this.orcForm.fotosExistentes = [];
       this.orcForm.novasFotos = [];
-      this.sincronizarDefaultsFormularios();
+      this.orcForm.inTecido = { item_id: "", quantidade: 1, observacao: "" };
+      this.orcForm.inAviamento = { item_id: "", quantidade: 1, observacao: "" };
+      this.orcForm.inOutros = { item_id: "", quantidade: 1, observacao: "" };
+      this.orcForm.inServico = {
+        item_id: "",
+        complexidade: 1,
+        quantidade: 1,
+        tipo_desconto: "nenhum",
+        valor_desconto: 0,
+        motivo_desconto: "",
+        observacao: "",
+      };
     },
 
     resetarOS() {
       this.osForm.editandoId = null;
       this.osForm.orcamento_origem_id = null;
-      this.osForm.cliente_id =
-        this.clientes.length > 0 ? this.clientes[0].id : "";
+      this.osForm.cliente_id = "";
       this.osForm.data_entrega = dataFuturaISO(7);
       this.osForm.observacoes = "";
       this.osForm.grupos = [];
       this.osForm.fotosExistentes = [];
       this.osForm.novasFotos = [];
-      this.sincronizarDefaultsFormularios();
+      this.osForm.inServico = {
+        item_id: "",
+        complexidade: 1,
+        quantidade: 1,
+        tipo_desconto: "nenhum",
+        valor_desconto: 0,
+        motivo_desconto: "",
+        observacao: "",
+      };
     },
 
     // ── Salvar Orçamento / OS e Baixar PDF ──
@@ -1187,10 +1220,20 @@ window.atelieApp = function () {
           JSON.stringify(doc.fotos || [])
         );
         this.orcForm.novasFotos = [];
+        this.orcForm.inTecido = { item_id: "", quantidade: 1, observacao: "" };
+        this.orcForm.inAviamento = { item_id: "", quantidade: 1, observacao: "" };
+        this.orcForm.inOutros = { item_id: "", quantidade: 1, observacao: "" };
+        this.orcForm.inServico = {
+          item_id: "",
+          complexidade: 1,
+          quantidade: 1,
+          tipo_desconto: "nenhum",
+          valor_desconto: 0,
+          motivo_desconto: "",
+          observacao: "",
+        };
         this.navegarPara("orcamento", { manterEdicao: true });
       } else {
-        const matDefault =
-          this.materiais.length > 0 ? this.materiais[0].id : "";
         this.osForm.editandoId = doc.id;
         this.osForm.orcamento_origem_id = doc.orcamento_origem_id || null;
         this.osForm.cliente_id = doc.cliente_id;
@@ -1199,13 +1242,22 @@ window.atelieApp = function () {
         this.osForm.grupos = (doc.grupos || []).map((g) => ({
           servico: JSON.parse(JSON.stringify(g.servico)),
           materiais: JSON.parse(JSON.stringify(g.materiais || [])),
-          inMatId: matDefault,
+          inMatId: "",
           inMatQtd: 1,
         }));
         this.osForm.fotosExistentes = JSON.parse(
           JSON.stringify(doc.fotos || [])
         );
         this.osForm.novasFotos = [];
+        this.osForm.inServico = {
+          item_id: "",
+          complexidade: 1,
+          quantidade: 1,
+          tipo_desconto: "nenhum",
+          valor_desconto: 0,
+          motivo_desconto: "",
+          observacao: "",
+        };
         this.navegarPara("os", { manterEdicao: true });
       }
     },
