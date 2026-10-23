@@ -26,6 +26,8 @@ from api.backend_db import (
     execute,
     login_supabase,
     validar_token,
+    gerar_token_biometria,
+    trocar_token_biometria_por_sessao,
     upload_foto,
     excluir_foto,
     marcar_orcamentos_vencidos,
@@ -102,6 +104,10 @@ class LoginInput(BaseModel):
     senha: str
 
 
+class BiometriaLoginInput(BaseModel):
+    bio_token: str
+
+
 class PrestadorInput(BaseModel):
     nome: str
     telefone: Optional[str] = ""
@@ -168,6 +174,24 @@ def api_login(dados: LoginInput):
         if "invalid login credentials" in msg or "invalid_credentials" in msg:
             raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
         raise HTTPException(status_code=400, detail=f"Erro ao autenticar: {e}")
+
+
+@app.post("/api/auth/biometria/registrar")
+def api_registrar_biometria(user_email: str = Depends(require_auth)):
+    """Emite um token vinculado à credencial biométrica do aparelho."""
+    bio_token = gerar_token_biometria(user_email)
+    return {"bio_token": bio_token, "email": user_email}
+
+
+@app.post("/api/auth/biometria/login")
+def api_login_biometria(dados: BiometriaLoginInput):
+    """Troca o token biométrico desbloqueado pela digital do aparelho por uma sessão de 30 dias."""
+    try:
+        return trocar_token_biometria_por_sessao(dados.bio_token)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro no login biométrico: {e}")
 
 
 @app.get("/api/bootstrap")

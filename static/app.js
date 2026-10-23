@@ -45,10 +45,19 @@ window.atelieApp = function () {
     // ── Autenticação & Estado Global ──
     token: localStorage.getItem("atelie_token") || "",
     userEmail: localStorage.getItem("atelie_email") || "",
-    loginEmail: "",
+    loginEmail:
+      localStorage.getItem("atelie_ultimo_email") ||
+      localStorage.getItem("atelie_bio_email") ||
+      "",
     loginSenha: "",
     loginLoading: false,
     loginErro: "",
+    suportaBiometria: false,
+    biometriaAtiva: Boolean(
+      localStorage.getItem("atelie_bio_cred_id") &&
+        localStorage.getItem("atelie_bio_token")
+    ),
+    bioEmail: localStorage.getItem("atelie_bio_email") || "",
 
     carregando: false,
     salvando: false,
@@ -156,6 +165,19 @@ window.atelieApp = function () {
     // ══════════════════════════════════════════════════════════════
 
     async init() {
+      try {
+        if (
+          window.PublicKeyCredential &&
+          typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable ===
+            "function"
+        ) {
+          this.suportaBiometria =
+            await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        }
+      } catch (_) {
+        this.suportaBiometria = false;
+      }
+
       if (this.token) {
         await this.carregarBootstrap();
       }
@@ -345,6 +367,24 @@ window.atelieApp = function () {
     // AUTENTICAÇÃO E CARGA INICIAL
     // ══════════════════════════════════════════════════════════════
 
+    _bufferParaBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    },
+
+    _base64ParaUint8Array(base64) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    },
+
     async fazerLogin() {
       this.loginErro = "";
       this.loginLoading = true;
@@ -365,10 +405,145 @@ window.atelieApp = function () {
         this.userEmail = data.email;
         localStorage.setItem("atelie_token", this.token);
         localStorage.setItem("atelie_email", this.userEmail);
+        localStorage.setItem("atelie_ultimo_email", this.userEmail);
         this.loginSenha = "";
         await this.carregarBootstrap();
       } catch (e) {
         this.loginErro = e.message;
+      } finally {
+        this.loginLoading = false;
+      }
+    },
+
+    async ativarBiometria() {
+      try {
+        if (!window.PublicKeyCredential || !navigator.credentials) {
+          this.mostrarToast(
+            "Este navegador não suporta leitor biométrico.",
+            "erro"
+          );
+          return;
+        }
+        const res = await this.apiFetch("/api/auth/biometria/registrar", {
+          method: "POST",
+        });
+        const challenge = crypto.getRandomValues(new Uint8Array(32));
+        const userIdBytes = new TextEncoder().encode(this.userEmail || "atelie");
+
+        const credential = await navigator.credentials.create({
+          publicKey: {
+            challenge,
+            rp: { name: "Ateliê - Gestão" },
+            user: {
+              id: userIdBytes,
+              name: this.userEmail,
+              displayName: this.userEmail,
+            },
+            pubKeyCredParams: [
+              { type: "public-key", alg: -7 },
+              { type: "public-key", alg: -257 },
+            ],
+            authenticatorSelection: {
+              authenticatorAttachment: "platform",
+              userVerification: "required",
+              residentKey: "preferred",
+            },
+            timeout: 60000,
+          },
+        });
+
+        if (!credential || !credential.rawId) {
+          throw new Error("Não foi possível registrar a digital.");
+        }
+
+        const credIdB64 = this._bufferParaBase64(credential.rawId);
+        localStorage.setItem("atelie_bio_cred_id", credIdB64);
+        localStorage.setItem("atelie_bio_token", res.bio_token);
+        localStorage.setItem("atelie_bio_email", this.userEmail);
+        this.biometriaAtiva = true;
+        this.bioEmail = this.userEmail;
+        this.menuMobileAberto = false;
+        this.mostrarToast("Login por Impressão Digital ativado neste aparelho!");
+      } catch (e) {
+        if (e.name === "NotAllowedError") {
+          this.mostrarToast("Leitura da digital cancelada.", "erro");
+        } else {
+          this.mostrarToast(
+            e.message || "Não foi possível ativar a digital neste aparelho.",
+            "erro"
+          );
+        }
+      }
+    },
+
+    removerBiometria() {
+      localStorage.removeItem("atelie_bio_cred_id");
+      localStorage.removeItem("atelie_bio_token");
+      localStorage.removeItem("atelie_bio_email");
+      this.biometriaAtiva = false;
+      this.bioEmail = "";
+      this.mostrarToast("Login por digital desativado neste aparelho.");
+    },
+
+    async entrarComBiometria() {
+      this.loginErro = "";
+      this.loginLoading = true;
+      try {
+        const credIdB64 = localStorage.getItem("atelie_bio_cred_id");
+        const bioToken = localStorage.getItem("atelie_bio_token");
+        if (!credIdB64 || !bioToken) {
+          throw new Error("Digital não configurada neste aparelho.");
+        }
+
+        const challenge = crypto.getRandomValues(new Uint8Array(32));
+        const assertion = await navigator.credentials.get({
+          publicKey: {
+            challenge,
+            allowCredentials: [
+              {
+                type: "public-key",
+                id: this._base64ParaUint8Array(credIdB64),
+              },
+            ],
+            userVerification: "required",
+            timeout: 60000,
+          },
+        });
+
+        if (!assertion) {
+          throw new Error("Verificação biométrica não concluída.");
+        }
+
+        const res = await fetch("/api/auth/biometria/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bio_token: bioToken }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          if (res.status === 401) {
+            this.removerBiometria();
+          }
+          throw new Error(
+            data.detail || "Sessão biométrica expirada. Entre com sua senha."
+          );
+        }
+
+        this.token = data.access_token;
+        this.userEmail = data.email;
+        localStorage.setItem("atelie_token", this.token);
+        localStorage.setItem("atelie_email", this.userEmail);
+        localStorage.setItem("atelie_ultimo_email", this.userEmail);
+        if (data.bio_token) {
+          localStorage.setItem("atelie_bio_token", data.bio_token);
+        }
+        await this.carregarBootstrap();
+      } catch (e) {
+        if (e.name === "NotAllowedError") {
+          this.loginErro = "Leitura da digital cancelada.";
+        } else {
+          this.loginErro = e.message || "Falha ao autenticar com a digital.";
+        }
       } finally {
         this.loginLoading = false;
       }
@@ -379,6 +554,10 @@ window.atelieApp = function () {
       this.userEmail = "";
       localStorage.removeItem("atelie_token");
       localStorage.removeItem("atelie_email");
+      this.loginEmail =
+        localStorage.getItem("atelie_ultimo_email") ||
+        localStorage.getItem("atelie_bio_email") ||
+        this.loginEmail;
     },
 
     async carregarBootstrap() {

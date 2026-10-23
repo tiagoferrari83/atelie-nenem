@@ -7,6 +7,10 @@ ou localmente (lendo .streamlit/secrets.toml automaticamente).
 import os
 import time
 import uuid
+import json
+import hmac
+import base64
+import hashlib
 from pathlib import Path
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -133,14 +137,72 @@ def get_supabase_client():
     return create_client(cfg["supabase_url"], cfg["supabase_key"])
 
 
+def _get_signing_secret() -> bytes:
+    cfg = get_config()
+    raw = f"{cfg.get('supabase_key', '')}:{cfg.get('database_url', '')}:atelie-auth-v1"
+    return hashlib.sha256(raw.encode("utf-8")).digest()
+
+
+def gerar_token_assinado(email: str, dias_validade: int = 30, escopo: str = "sessao") -> str:
+    payload = {
+        "email": email.strip(),
+        "exp": int(time.time()) + int(dias_validade * 86400),
+        "escopo": escopo,
+    }
+    payload_bytes = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    payload_b64 = base64.urlsafe_b64encode(payload_bytes).decode("ascii").rstrip("=")
+    sig = hmac.new(_get_signing_secret(), payload_b64.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"at1.{payload_b64}.{sig}"
+
+
+def validar_token_assinado(token: str, escopo_esperado: str = "sessao") -> str | None:
+    if not token or not token.startswith("at1."):
+        return None
+    partes = token.split(".")
+    if len(partes) != 3:
+        return None
+    _, payload_b64, sig = partes
+    expected_sig = hmac.new(_get_signing_secret(), payload_b64.encode("ascii"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected_sig, sig):
+        return None
+    try:
+        pad = "=" * (-len(payload_b64) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload_b64 + pad).decode("utf-8"))
+        if data.get("escopo") != escopo_esperado:
+            return None
+        if int(data.get("exp", 0)) <= int(time.time()):
+            return None
+        return data.get("email")
+    except Exception:
+        return None
+
+
+def gerar_token_biometria(email: str) -> str:
+    """Gera token de longa duração (180 dias) vinculado ao leitor biométrico do aparelho."""
+    return gerar_token_assinado(email, dias_validade=180, escopo="biometria")
+
+
+def trocar_token_biometria_por_sessao(bio_token: str) -> dict:
+    """Valida o token biométrico após confirmação da digital e emite sessão de 30 dias."""
+    email = validar_token_assinado(bio_token, escopo_esperado="biometria")
+    if not email:
+        raise ValueError("Credencial biométrica expirada ou inválida. Faça login com senha para reativar.")
+    novo_access = gerar_token_assinado(email, dias_validade=30, escopo="sessao")
+    novo_bio = gerar_token_biometria(email)
+    return {
+        "access_token": novo_access,
+        "bio_token": novo_bio,
+        "email": email,
+    }
+
+
 def login_supabase(email: str, senha: str) -> dict:
-    """Autentica via Supabase Auth e retorna token + dados do usuário."""
+    """Autentica via Supabase Auth e retorna token de sessão de 30 dias + dados do usuário."""
     client = get_supabase_client()
     res = client.auth.sign_in_with_password({"email": email.strip(), "password": senha})
     if not res or not res.user or not res.session:
         raise ValueError("Credenciais inválidas.")
-    token = res.session.access_token
-    _token_cache[token] = (res.user.email, time.time() + 3600)
+    token = gerar_token_assinado(res.user.email, dias_validade=30, escopo="sessao")
     return {
         "access_token": token,
         "email": res.user.email,
@@ -149,9 +211,13 @@ def login_supabase(email: str, senha: str) -> dict:
 
 
 def validar_token(token: str) -> str | None:
-    """Valida o Bearer token no cache ou junto ao Supabase Auth. Retorna o email se válido."""
+    """Valida o token de sessão assinado (30 dias) ou JWT do Supabase Auth. Retorna o email se válido."""
     if not token:
         return None
+    email_assinado = validar_token_assinado(token, escopo_esperado="sessao")
+    if email_assinado:
+        return email_assinado
+
     cached = _token_cache.get(token)
     if cached and cached[1] > time.time():
         return cached[0]
